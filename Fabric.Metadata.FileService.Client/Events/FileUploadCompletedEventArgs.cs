@@ -2,9 +2,9 @@
 {
     using System.ComponentModel;
 
-    public class FileUploadedEventArgs : CancelEventArgs
+    public class FileUploadCompletedEventArgs : CancelEventArgs
     {
-        public FileUploadedEventArgs(string filename)
+        public FileUploadCompletedEventArgs(string filename)
         {
             this.FileName = filename;
         }

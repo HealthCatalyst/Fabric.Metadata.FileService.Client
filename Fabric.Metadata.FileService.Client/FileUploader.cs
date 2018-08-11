@@ -17,7 +17,8 @@ namespace Fabric.Metadata.FileService.Client
     public delegate void NavigatingEventHandler(object sender, NavigatingEventArgs e);
     public delegate void NavigatedEventHandler(object sender, NavigatedEventArgs e);
     public delegate void PartUploadedEventHandler(object sender, PartUploadedEventArgs e);
-    public delegate void FileUploadedEventHandler(object sender, FileUploadedEventArgs e);
+    public delegate void FileUploadStartedEventHandler(object sender, FileUploadStartedEventArgs e);
+    public delegate void FileUploadCompletedEventHandler(object sender, FileUploadCompletedEventArgs e);
     public delegate void UploadErrorEventHandler(object sender, UploadErrorEventArgs e);
     public delegate void SessionCreatedEventHandler(object sender, SessionCreatedEventArgs e);
     public delegate void FileCheckedEventHandler(object sender, FileCheckedEventArgs e);
@@ -27,10 +28,13 @@ namespace Fabric.Metadata.FileService.Client
         public event NavigatingEventHandler Navigating;
         public event NavigatedEventHandler Navigated;
         public event PartUploadedEventHandler PartUploaded;
-        public event FileUploadedEventHandler FileUploaded;
+        public event FileUploadStartedEventHandler FileUploadStarted;
+        public event FileUploadCompletedEventHandler FileUploadCompleted;
         public event UploadErrorEventHandler UploadError;
         public event SessionCreatedEventHandler SessionCreated;
         public event FileCheckedEventHandler FileChecked;
+
+        private int numPartsUploaded = 0;
 
         public async Task UploadFileAsync(string filePath, string accessToken, int resourceId, string utTempFolder, string mdsBaseUrl)
         {
@@ -61,6 +65,9 @@ namespace Fabric.Metadata.FileService.Client
 
             var fullFileSize = new FileInfo(filePath).Length;
 
+            OnFileUploadStarted(new FileUploadStartedEventArgs(fileName, fileParts.Count));
+
+            numPartsUploaded = 0;
             // foreach chunk PUT into upload session
             foreach (var filePart in fileParts)
             {
@@ -340,8 +347,9 @@ namespace Fabric.Metadata.FileService.Client
 
                         if (result.IsSuccessStatusCode)
                         {
+                            numPartsUploaded++;
                             OnPartUploaded(
-                                new PartUploadedEventArgs(fileName, filePart, result.StatusCode.ToString(), filePartsCount));
+                                new PartUploadedEventArgs(fileName, filePart, result.StatusCode.ToString(), filePartsCount, numPartsUploaded));
                         }
                         else
                         {
@@ -408,7 +416,7 @@ namespace Fabric.Metadata.FileService.Client
 
                 if (result.IsSuccessStatusCode)
                 {
-                    OnFileUploaded(new FileUploadedEventArgs(filename));
+                    OnFileUploadCompleted(new FileUploadCompletedEventArgs(filename));
                 }
                 else
                 {
@@ -434,9 +442,14 @@ namespace Fabric.Metadata.FileService.Client
             Navigating?.Invoke(this, e);
         }
 
-        private void OnFileUploaded(FileUploadedEventArgs e)
+        private void OnFileUploadCompleted(FileUploadCompletedEventArgs e)
         {
-            FileUploaded?.Invoke(this, e);
+            FileUploadCompleted?.Invoke(this, e);
+        }
+
+        private void OnFileUploadStarted(FileUploadStartedEventArgs e)
+        {
+            FileUploadStarted?.Invoke(this, e);
         }
 
         private void OnUploadError(UploadErrorEventArgs e)
