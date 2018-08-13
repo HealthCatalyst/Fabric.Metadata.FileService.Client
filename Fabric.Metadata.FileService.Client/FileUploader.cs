@@ -44,9 +44,11 @@ namespace Fabric.Metadata.FileService.Client
             if (string.IsNullOrWhiteSpace(mdsBaseUrl)) throw new ArgumentNullException(nameof(mdsBaseUrl));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            // check if file already exists with hash
+            if (!mdsBaseUrl.EndsWith(@"/"))
+            {
+                mdsBaseUrl += @"/";
+            }
 
-            // divide up the file into chunks
             var fileSplitter = new FileSplitter();
             var fileName = Path.GetFileName(filePath);
 
@@ -86,6 +88,11 @@ namespace Fabric.Metadata.FileService.Client
             if (string.IsNullOrWhiteSpace(utTempFolder)) throw new ArgumentNullException(nameof(utTempFolder));
             if (string.IsNullOrWhiteSpace(mdsBaseUrl)) throw new ArgumentNullException(nameof(mdsBaseUrl));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
+
+            if (!mdsBaseUrl.EndsWith(@"/"))
+            {
+                mdsBaseUrl += @"/";
+            }
 
             await DownloadFile(mdsBaseUrl, accessToken, resourceId, utTempFolder);
         }
