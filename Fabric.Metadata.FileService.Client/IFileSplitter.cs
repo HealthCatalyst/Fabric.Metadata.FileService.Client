@@ -8,7 +8,7 @@ namespace Fabric.Metadata.FileService.Client
 
     public interface IFileSplitter
     {
-        Task<IList<FilePart>> SplitFile(string filePath, string fileName, string tempFolder,
+        Task<IList<FilePart>> SplitFile(string filePath, string fileName,
             long chunkSizeInBytes, long maxFileSizeInMegabytes, Func<Stream, FilePart, Task> fnActionForStream);
     }
 }

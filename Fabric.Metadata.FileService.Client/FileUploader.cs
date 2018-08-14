@@ -36,11 +36,10 @@ namespace Fabric.Metadata.FileService.Client
 
         private int numPartsUploaded = 0;
 
-        public async Task UploadFileAsync(string filePath, string accessToken, int resourceId, string utTempFolder, string mdsBaseUrl)
+        public async Task UploadFileAsync(string filePath, string accessToken, int resourceId, string mdsBaseUrl)
         {
             if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentNullException(nameof(filePath));
             if (string.IsNullOrWhiteSpace(accessToken)) throw new ArgumentNullException(nameof(accessToken));
-            if (string.IsNullOrWhiteSpace(utTempFolder)) throw new ArgumentNullException(nameof(utTempFolder));
             if (string.IsNullOrWhiteSpace(mdsBaseUrl)) throw new ArgumentNullException(nameof(mdsBaseUrl));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
@@ -70,7 +69,7 @@ namespace Fabric.Metadata.FileService.Client
 
             OnFileUploadStarted(new FileUploadStartedEventArgs(fileName, countOfFileParts));
 
-            var fileParts = await fileSplitter.SplitFile(filePath, fileName, utTempFolder, uploadSession.FileUploadChunkSizeInBytes,
+            var fileParts = await fileSplitter.SplitFile(filePath, fileName, uploadSession.FileUploadChunkSizeInBytes,
                 uploadSession.FileUploadMaxFileSizeInMegabytes, 
                 (stream, part) => UploadFilePartStreamAsync(stream, part, mdsBaseUrl, accessToken, resourceId, uploadSession.SessionId, fileName, fullFileSize, countOfFileParts) );
 

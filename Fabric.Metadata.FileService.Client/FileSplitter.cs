@@ -10,14 +10,11 @@ namespace Fabric.Metadata.FileService.Client
     /// <inheritdoc />
     public class FileSplitter : IFileSplitter
     {
-        // const int ReadbufferSize = 1024 * 1024; // 1MB
-
-        public async Task<IList<FilePart>> SplitFile(string filePath, string fileName, string tempFolder,
+        public async Task<IList<FilePart>> SplitFile(string filePath, string fileName,
             long chunkSizeInBytes, long maxFileSizeInMegabytes, Func<Stream, FilePart, Task> fnActionForStream)
         {
             if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentNullException(nameof(filePath));
             if (string.IsNullOrWhiteSpace(fileName)) throw new ArgumentNullException(nameof(fileName));
-            if (string.IsNullOrWhiteSpace(tempFolder)) throw new ArgumentNullException(nameof(tempFolder));
             if (chunkSizeInBytes <= 0) throw new ArgumentOutOfRangeException(nameof(chunkSizeInBytes));
             if (maxFileSizeInMegabytes <= 0) throw new ArgumentOutOfRangeException(nameof(maxFileSizeInMegabytes));
 
@@ -35,13 +32,10 @@ namespace Fabric.Metadata.FileService.Client
             string baseFileName = Path.GetFileName(filePath);
             // set the size of file chunk we are going to split into  
             long bufferChunkSize = chunkSizeInBytes;
-            // set a buffer size and an array to store the buffer data as we read it  
-            // byte[] fsBuffer = new byte[ReadbufferSize];
-            // var fileInfo = new FileInfo(FileName);
 
             var fileParts = new List<FilePart>();
             // open the file to read it into chunks  
-            using (FileStream fullFileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (FileStream fullFileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 // calculate the number of files that will be created  
                 int totalFileParts = 0;
@@ -58,8 +52,6 @@ namespace Fabric.Metadata.FileService.Client
                     string filePartNameOnly =
                         $"{baseFileName}.part_{(filePartCount + 1).ToString()}.{totalFileParts.ToString()}";
 
-                    var fullPathTofilePart = Path.Combine(tempFolder, filePartNameOnly);
-
                     var bytesRead = await fullFileStream.ReadAsync(data, 0, Convert.ToInt32(bufferChunkSize));
 
                     using (var memoryStream = new MemoryStream(data, 0, Convert.ToInt32(bytesRead)))
@@ -70,7 +62,6 @@ namespace Fabric.Metadata.FileService.Client
                             Id = filePartCount,
                             Offset = Convert.ToInt32(startOffset),
                             Size = Convert.ToInt32(memoryStream.Length),
-                            FullPath = fullPathTofilePart,
                             Hash = md5FileHasher.CalculateHashForStream(memoryStream),
                         };
 

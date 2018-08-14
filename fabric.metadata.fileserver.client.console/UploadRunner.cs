@@ -67,7 +67,7 @@ namespace fabric.metadata.fileserver.client.console
             Properties.Settings.Default.Save();
 
             var utTempFolder = Path.GetTempPath();
-            await fileUploader.UploadFileAsync(filePath, accessToken, resourceId, utTempFolder, mdsv2Url);
+            await fileUploader.UploadFileAsync(filePath, accessToken, resourceId, mdsv2Url);
         }
 
         private void FileUploader_FileChecked(object sender, Fabric.Metadata.FileService.Client.Events.FileCheckedEventArgs e)
@@ -116,7 +116,7 @@ namespace fabric.metadata.fileserver.client.console
 
         private void FileUploader_Navigating(object sender, Fabric.Metadata.FileService.Client.Events.NavigatingEventArgs e)
         {
-            Console.WriteLine($"{e.Method} {e.Uri}");
+            Console.WriteLine($"{e.Method} {e.FullUri}");
         }
 
         private static string NewReadLine()

@@ -7,12 +7,12 @@
     {
         public NavigatingEventArgs(Uri fullUri, string method)
         {
-            this.Uri = fullUri;
+            this.FullUri = fullUri;
             this.Method = method;
         }
 
         public string Method { get; set; }
 
-        public Uri Uri { get; set; }
+        public Uri FullUri { get; set; }
     }
 }
