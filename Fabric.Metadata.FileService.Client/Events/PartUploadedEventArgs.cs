@@ -4,19 +4,19 @@
 
     public class PartUploadedEventArgs : CancelEventArgs
     {
-        public PartUploadedEventArgs(string fileName, FilePart filePart, string statusCode, int filePartsCount,
+        public PartUploadedEventArgs(string fileName, FilePart filePart, string statusCode, int totalFileParts,
             int numPartsUploaded)
         {
             this.FileName = fileName;
             this.FilePart = filePart;
             this.StatusCode = statusCode;
-            this.FilePartsCount = filePartsCount;
+            this.TotalFileParts = totalFileParts;
             this.NumPartsUploaded = numPartsUploaded;
         }
 
         public string FileName { get; }
 
-        public int FilePartsCount { get; }
+        public int TotalFileParts { get; }
 
         public string StatusCode { get; }
 

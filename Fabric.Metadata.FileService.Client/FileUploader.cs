@@ -149,6 +149,14 @@ namespace Fabric.Metadata.FileService.Client
                         }
                     }
                 }
+                else if (result.StatusCode == HttpStatusCode.NotFound)
+                {
+                    // this is acceptable response if the file does not exist on the server
+                }
+                else
+                {
+                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), await result.Content.ReadAsStringAsync()));
+                }
             }
 
             return false;
@@ -332,6 +340,8 @@ namespace Fabric.Metadata.FileService.Client
             {
                 using (var content = new MultipartFormDataContent())
                 {
+                    stream.Seek(0, SeekOrigin.Begin);
+
                     var fileContent = new StreamContent(stream);
                     fileContent.Headers.ContentDisposition = new
                         ContentDispositionHeaderValue("attachment")

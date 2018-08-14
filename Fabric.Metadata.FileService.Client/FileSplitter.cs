@@ -10,7 +10,7 @@ namespace Fabric.Metadata.FileService.Client
     /// <inheritdoc />
     public class FileSplitter : IFileSplitter
     {
-        const int ReadbufferSize = 1024 * 1024; // 1MB
+        // const int ReadbufferSize = 1024 * 1024; // 1MB
 
         public async Task<IList<FilePart>> SplitFile(string filePath, string fileName, string tempFolder,
             long chunkSizeInBytes, long maxFileSizeInMegabytes, Func<Stream, FilePart, Task> fnActionForStream)
@@ -36,7 +36,7 @@ namespace Fabric.Metadata.FileService.Client
             // set the size of file chunk we are going to split into  
             long bufferChunkSize = chunkSizeInBytes;
             // set a buffer size and an array to store the buffer data as we read it  
-            byte[] fsBuffer = new byte[ReadbufferSize];
+            // byte[] fsBuffer = new byte[ReadbufferSize];
             // var fileInfo = new FileInfo(FileName);
 
             var fileParts = new List<FilePart>();
@@ -48,40 +48,28 @@ namespace Fabric.Metadata.FileService.Client
                 totalFileParts = GetCountOfFileParts(bufferChunkSize, fullFileStream.Length);
 
                 int filePartCount = 0;
-                byte[] data = new byte[ReadbufferSize];
+                byte[] data = new byte[bufferChunkSize];
+
                 // scan through the file, and each time we get enough data to fill a chunk, write out that file  
                 while (fullFileStream.Position < fullFileStream.Length)
                 {
+                    long startOffset = fullFileStream.Position;
+
                     string filePartNameOnly =
                         $"{baseFileName}.part_{(filePartCount + 1).ToString()}.{totalFileParts.ToString()}";
 
                     var fullPathTofilePart = Path.Combine(tempFolder, filePartNameOnly);
 
-                    using (var memoryStream = new MemoryStream(data, true))
+                    var bytesRead = await fullFileStream.ReadAsync(data, 0, Convert.ToInt32(bufferChunkSize));
+
+                    using (var memoryStream = new MemoryStream(data, 0, Convert.ToInt32(bytesRead)))
                     {
                         memoryStream.Seek(0, SeekOrigin.Begin);
-
-                        var bytesRemaining = Convert.ToInt32(bufferChunkSize);
-                        int bytesRead = 0;
-                        var bytesToRead = Math.Min(bytesRemaining, ReadbufferSize);
-
-                        while (bytesRemaining > 0 && (bytesRead = await fullFileStream.ReadAsync(fsBuffer, 0,
-                         bytesToRead)) > 0)
-                        {
-                            await memoryStream.WriteAsync(fsBuffer, 0, bytesRead);
-                            bytesRemaining -= bytesRead;
-                        }
-
-                        if (bytesToRead < ReadbufferSize)
-                        {
-                            memoryStream.SetLength(bytesToRead);
-                        }
-
                         var filePart = new FilePart
                         {
                             Id = filePartCount,
-                            Offset = Convert.ToInt32(fullFileStream.Position),
-                            Size = Convert.ToInt32(bytesToRead),
+                            Offset = Convert.ToInt32(startOffset),
+                            Size = Convert.ToInt32(memoryStream.Length),
                             FullPath = fullPathTofilePart,
                             Hash = md5FileHasher.CalculateHashForStream(memoryStream),
                         };

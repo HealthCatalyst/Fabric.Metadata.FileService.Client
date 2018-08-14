@@ -7,3 +7,5 @@
 /Fabric.Metadata.FileService.Client/bin/Debug
 /Fabric.Metadata.FileService.Client/obj
 /.vs/Fabric.Metadata.FileService.Client/DesignTimeBuild
+/fabric.metadata.fileserver.client.console/bin/Debug
+/fabric.metadata.fileserver.client.console/obj/Debug
