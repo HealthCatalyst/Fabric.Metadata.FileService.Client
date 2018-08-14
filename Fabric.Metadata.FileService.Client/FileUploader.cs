@@ -62,24 +62,28 @@ namespace Fabric.Metadata.FileService.Client
             // create new upload session
             var uploadSession = await CreateNewUploadSessionAsync(mdsBaseUrl, accessToken, resourceId);
 
-            var fileParts = await fileSplitter.SplitFile(filePath, fileName, utTempFolder, uploadSession.FileUploadChunkSizeInBytes,
-                uploadSession.FileUploadMaxFileSizeInMegabytes);
+            numPartsUploaded = 0;
 
             var fullFileSize = new FileInfo(filePath).Length;
 
-            OnFileUploadStarted(new FileUploadStartedEventArgs(fileName, fileParts.Count));
+            var countOfFileParts = fileSplitter.GetCountOfFileParts(uploadSession.FileUploadChunkSizeInBytes, fullFileSize);
 
-            numPartsUploaded = 0;
-            // foreach chunk PUT into upload session
-            foreach (var filePart in fileParts)
-            {
-                await InternalUploadFileAsync(filePart, mdsBaseUrl, accessToken, resourceId, uploadSession.SessionId,
-                    fileName, fullFileSize, fileParts.Count);
-            }
+            OnFileUploadStarted(new FileUploadStartedEventArgs(fileName, countOfFileParts));
+
+            var fileParts = await fileSplitter.SplitFile(filePath, fileName, utTempFolder, uploadSession.FileUploadChunkSizeInBytes,
+                uploadSession.FileUploadMaxFileSizeInMegabytes, 
+                (stream, part) => UploadFilePartStreamAsync(stream, part, mdsBaseUrl, accessToken, resourceId, uploadSession.SessionId, fileName, fullFileSize, countOfFileParts) );
+
+
 
             // call CommitAsync
             await CommitAsync(mdsBaseUrl, accessToken, resourceId, uploadSession.SessionId, fileName, hashForFile,
                 fullFileSize, fileParts);
+        }
+
+        private async Task UploadFilePartStreamAsync(Stream stream, FilePart part, string mdsBaseUrl, string accessToken, int resourceId, Guid uploadSessionId, string fileName, long fullFileSize, int totalFileParts)
+        {
+            await InternalUploadStreamAsync(stream, part, mdsBaseUrl, accessToken, resourceId, uploadSessionId, fileName, fullFileSize, totalFileParts);
         }
 
         public async Task DownloadFileAsync(string accessToken, int resourceId, string utTempFolder, string mdsBaseUrl)
@@ -309,7 +313,8 @@ namespace Fabric.Metadata.FileService.Client
         }
 
 
-        private async Task<bool> InternalUploadFileAsync(FilePart filePart, string mdsBaseUrl, string accessToken,
+        private async Task<bool> InternalUploadStreamAsync(Stream stream, FilePart filePart, string mdsBaseUrl,
+            string accessToken,
             int resourceId,
             Guid sessionId, string fileName, long fullFileSize, int filePartsCount)
         {
@@ -327,7 +332,7 @@ namespace Fabric.Metadata.FileService.Client
             {
                 using (var content = new MultipartFormDataContent())
                 {
-                    var fileContent = new ByteArrayContent(System.IO.File.ReadAllBytes(filePart.FullPath));
+                    var fileContent = new StreamContent(stream);
                     fileContent.Headers.ContentDisposition = new
                         ContentDispositionHeaderValue("attachment")
                     {

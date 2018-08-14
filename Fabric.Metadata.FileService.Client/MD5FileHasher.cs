@@ -21,11 +21,19 @@
 
             using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
-                // from https://stackoverflow.com/questions/10520048/calculate-md5-checksum-for-a-file
-                var md5Hash = this.md5Hasher.ComputeHash(stream);
-                return BitConverter.ToString(md5Hash).Replace("-", string.Empty).ToLowerInvariant();
+                return CalculateHashForStream(stream);
             }
 
+        }
+
+        // ReSharper disable once InconsistentNaming
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Globalization", "CA1308:NormalizeStringsToUppercase", Justification = "MD5 hash should be lower case")]
+        [Pure]
+        public string CalculateHashForStream(Stream stream)
+        {
+            // from https://stackoverflow.com/questions/10520048/calculate-md5-checksum-for-a-file
+            var md5Hash = this.md5Hasher.ComputeHash(stream);
+            return BitConverter.ToString(md5Hash).Replace("-", string.Empty).ToLowerInvariant();
         }
     }
 }
