@@ -483,7 +483,9 @@ namespace Fabric.Metadata.FileService.Client
             SessionCreated?.Invoke(this, e);
         }
 
-
+        public void Dispose()
+        {
+        }
     }
 }
 
