@@ -23,7 +23,7 @@ namespace Fabric.Metadata.FileService.Client
     public delegate void SessionCreatedEventHandler(object sender, SessionCreatedEventArgs e);
     public delegate void FileCheckedEventHandler(object sender, FileCheckedEventArgs e);
 
-    public class FileUploader
+    public class FileUploader : IFileUploader
     {
         public event NavigatingEventHandler Navigating;
         public event NavigatedEventHandler Navigated;
