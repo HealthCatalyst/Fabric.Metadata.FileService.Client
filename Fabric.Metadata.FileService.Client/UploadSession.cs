@@ -1,7 +1,10 @@
-﻿using System;
-
-namespace Fabric.Metadata.FileService.Client
+﻿namespace Fabric.Metadata.FileService.Client
 {
+    using System;
+
+    /// <summary>
+    /// UploadSession
+    /// </summary>
     public class UploadSession
     {
         /// <summary>
@@ -18,5 +21,31 @@ namespace Fabric.Metadata.FileService.Client
         /// Gets or sets FileUploadMaxFileSizeInMegabytes
         /// </summary>
         public long FileUploadMaxFileSizeInMegabytes { get; set; }
+
+        /// <summary>
+        /// Gets or sets SessionStartedBy
+        /// </summary>
+        public string SessionStartedBy { get; set; }
+
+        /// <summary>
+        /// Gets or sets SessionStartedDateTimeUtc
+        /// </summary>
+        public DateTime? SessionStartedDateTimeUtc { get; set; }
+
+        /// <summary>
+        /// Gets or sets SessionFinishedDateTimeUtc
+        /// </summary>
+        public DateTime? SessionFinishedDateTimeUtc { get; set; }
+
+        /// <summary>
+        /// Gets or sets FileHash
+        /// </summary>
+        public string FileHash { get; set; }
+
+        /// <summary>
+        /// Gets or sets FileUploadSessionExpirationInMinutes
+        /// </summary>
+        public int FileUploadSessionExpirationInMinutes { get; set; }
     }
+
 }

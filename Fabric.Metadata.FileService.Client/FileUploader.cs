@@ -1,9 +1,4 @@
-﻿using System.Linq;
-using System.Net;
-using System.Runtime.InteropServices.ComTypes;
-using Fabric.Metadata.FileService.Client.Events;
-
-namespace Fabric.Metadata.FileService.Client
+﻿namespace Fabric.Metadata.FileService.Client
 {
     using System;
     using System.Collections.Generic;
@@ -13,6 +8,9 @@ namespace Fabric.Metadata.FileService.Client
     using System.Text;
     using System.Threading.Tasks;
     using Newtonsoft.Json;
+    using System.Linq;
+    using System.Net;
+    using Fabric.Metadata.FileService.Client.Events;
 
     public delegate void NavigatingEventHandler(object sender, NavigatingEventArgs e);
     public delegate void NavigatedEventHandler(object sender, NavigatedEventArgs e);
@@ -67,15 +65,12 @@ namespace Fabric.Metadata.FileService.Client
 
             var countOfFileParts = fileSplitter.GetCountOfFileParts(uploadSession.FileUploadChunkSizeInBytes, fullFileSize);
 
-            OnFileUploadStarted(new FileUploadStartedEventArgs(fileName, countOfFileParts));
+            OnFileUploadStarted(new FileUploadStartedEventArgs(resourceId, uploadSession.SessionId, fileName, countOfFileParts));
 
             var fileParts = await fileSplitter.SplitFile(filePath, fileName, uploadSession.FileUploadChunkSizeInBytes,
                 uploadSession.FileUploadMaxFileSizeInMegabytes, 
                 (stream, part) => UploadFilePartStreamAsync(stream, part, mdsBaseUrl, accessToken, resourceId, uploadSession.SessionId, fileName, fullFileSize, countOfFileParts) );
 
-
-
-            // call CommitAsync
             await CommitAsync(mdsBaseUrl, accessToken, resourceId, uploadSession.SessionId, fileName, hashForFile,
                 fullFileSize, fileParts);
         }
@@ -140,7 +135,7 @@ namespace Fabric.Metadata.FileService.Client
                     {
                         var hashForFileOnServer = Encoding.UTF8.GetString(headersContentMd5);
 
-                        OnFileChecked(new FileCheckedEventArgs(true, hashForFile, hashForFileOnServer, headersLastModified, contentDispositionFileName, hashForFile == hashForFileOnServer));
+                        OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile, hashForFileOnServer, headersLastModified, contentDispositionFileName, hashForFile == hashForFileOnServer));
 
                         if (hashForFile == hashForFileOnServer)
                         {
@@ -198,6 +193,10 @@ namespace Fabric.Metadata.FileService.Client
                         }
                     }
                 }
+                else
+                {
+                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), await result.Content.ReadAsStringAsync()));
+                }
             }
         }
 
@@ -237,20 +236,15 @@ namespace Fabric.Metadata.FileService.Client
                 {
                     var content = await result.Content.ReadAsStringAsync();
 
-                    dynamic clientResponse = JsonConvert.DeserializeObject(content);
-                    string sessionIdText = (string)clientResponse["SessionId"];
-                    var sessionId = Guid.Parse(sessionIdText);
-                    var fileUploadChunkSizeInBytes = Convert.ToInt64((string)clientResponse["FileUploadChunkSizeInBytes"]);
-                    var fileUploadMaxFileSizeInMegabytes = Convert.ToInt64((string)clientResponse["FileUploadMaxFileSizeInMegabytes"]);
+                    var clientResponse = JsonConvert.DeserializeObject<UploadSession>(content);
 
-                    OnSessionCreated(new SessionCreatedEventArgs(sessionId, fileUploadChunkSizeInBytes, fileUploadMaxFileSizeInMegabytes));
+                    OnSessionCreated(new SessionCreatedEventArgs(
+                        resourceId, clientResponse.SessionId, clientResponse.FileUploadChunkSizeInBytes, 
+                        clientResponse.FileUploadMaxFileSizeInMegabytes, 
+                        clientResponse.SessionStartedBy, clientResponse.SessionStartedDateTimeUtc, 
+                        clientResponse.FileUploadSessionExpirationInMinutes));
 
-                    return new UploadSession
-                    {
-                        SessionId = sessionId,
-                        FileUploadChunkSizeInBytes = fileUploadChunkSizeInBytes,
-                        FileUploadMaxFileSizeInMegabytes = fileUploadMaxFileSizeInMegabytes
-                    };
+                    return clientResponse;
                 }
                 else if (result.StatusCode == HttpStatusCode.BadRequest)
                 {
@@ -370,11 +364,12 @@ namespace Fabric.Metadata.FileService.Client
                         {
                             numPartsUploaded++;
                             OnPartUploaded(
-                                new PartUploadedEventArgs(fileName, filePart, result.StatusCode.ToString(), filePartsCount, numPartsUploaded));
+                                new PartUploadedEventArgs(resourceId, sessionId, fileName, filePart, result.StatusCode.ToString(), filePartsCount, numPartsUploaded));
                         }
                         else
                         {
                             var errorText = await result.Content.ReadAsStringAsync();
+                            OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), errorText));
                             throw new Exception($"Error [{result.StatusCode}] {errorText}");
                         }
 
@@ -437,11 +432,19 @@ namespace Fabric.Metadata.FileService.Client
 
                 if (result.IsSuccessStatusCode)
                 {
-                    OnFileUploadCompleted(new FileUploadCompletedEventArgs(filename));
+                    var content = await result.Content.ReadAsStringAsync();
+                    var clientResponse = JsonConvert.DeserializeObject<UploadSession>(content);
+
+                    OnFileUploadCompleted(new FileUploadCompletedEventArgs(
+                        resourceId, sessionId, filename, clientResponse.FileHash,
+                        clientResponse.SessionStartedDateTimeUtc, clientResponse.SessionFinishedDateTimeUtc,
+                        clientResponse.SessionStartedBy));
                 }
                 else
                 {
                     var errorText = await result.Content.ReadAsStringAsync();
+                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), errorText));
+
                     throw new Exception($"Error [{result.StatusCode}] {errorText}");
                 }
 

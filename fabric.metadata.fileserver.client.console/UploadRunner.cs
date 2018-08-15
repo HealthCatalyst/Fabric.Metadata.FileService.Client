@@ -72,9 +72,9 @@ namespace fabric.metadata.fileserver.client.console
 
         private void FileUploader_FileChecked(object sender, Fabric.Metadata.FileService.Client.Events.FileCheckedEventArgs e)
         {
-            var fileFound = e.FileFound ? "File found" : "File not found";
+            var fileFound = e.WasFileFound ? "File found" : "File not found";
 
-            if (e.HashMatches)
+            if (e.DidHashMatch)
             {
                 Console.WriteLine($"File matched: filename(server):[{e.FileNameOnServer}] lastmodified(server):{e.LastModifiedOnServer} Hash(local):[{e.HashForLocalFile}], Hash(server):[{e.HashOnServer}]");
             }
@@ -101,7 +101,7 @@ namespace fabric.metadata.fileserver.client.console
         }
         private void FileUploader_FileUploadStarted(object sender, Fabric.Metadata.FileService.Client.Events.FileUploadStartedEventArgs e)
         {
-            Console.WriteLine($"File Upload Started: {e.FileName} Parts={e.FilePartsCount}");
+            Console.WriteLine($"File Upload Started: {e.FileName} Parts={e.TotalFileParts}");
         }
 
         private void FileUploader_PartUploaded(object sender, Fabric.Metadata.FileService.Client.Events.PartUploadedEventArgs e)
