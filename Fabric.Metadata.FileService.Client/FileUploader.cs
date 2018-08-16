@@ -119,11 +119,11 @@
                 var fullUri = new Uri(baseUri, $"Files({resourceId})");
 
                 var method = Convert.ToString(HttpMethod.Head);
-                OnNavigate(new NavigatingEventArgs(fullUri, method));
+                OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
                 var result = await httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, fullUri));
 
-                OnNavigated(new NavigatedEventArgs(method, fullUri, result.StatusCode.ToString()));
+                OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, result.StatusCode.ToString()));
 
                 if (result.StatusCode == HttpStatusCode.NoContent)
                 {
@@ -149,7 +149,8 @@
                 }
                 else
                 {
-                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), await result.Content.ReadAsStringAsync()));
+                    var content = await result.Content.ReadAsStringAsync();
+                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), content, resourceId));
                 }
             }
 
@@ -167,11 +168,11 @@
                 var fullUri = new Uri(baseUri, $"Files({resourceId})");
 
                 var method = Convert.ToString(HttpMethod.Get);
-                OnNavigate(new NavigatingEventArgs(fullUri, method));
+                OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
                 var result = await httpClient.GetAsync(fullUri);
 
-                OnNavigated(new NavigatedEventArgs(method, fullUri, result.StatusCode.ToString()));
+                OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, result.StatusCode.ToString()));
 
                 if (result.IsSuccessStatusCode)
                 {
@@ -195,7 +196,7 @@
                 }
                 else
                 {
-                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), await result.Content.ReadAsStringAsync()));
+                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), await result.Content.ReadAsStringAsync(), resourceId));
                 }
             }
         }
@@ -222,7 +223,7 @@
                 var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions");
 
                 var method = Convert.ToString(HttpMethod.Post);
-                OnNavigate(new NavigatingEventArgs(fullUri, method));
+                OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
                 var result = await httpClient.PostAsync(
                     fullUri,
@@ -230,7 +231,7 @@
                         Encoding.UTF8,
                         "application/json"));
 
-                OnNavigated(new NavigatedEventArgs(method, fullUri, result.StatusCode.ToString()));
+                OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, result.StatusCode.ToString()));
 
                 if (result.IsSuccessStatusCode)
                 {
@@ -266,7 +267,7 @@
                 else
                 {
                     var content = await result.Content.ReadAsStringAsync();
-                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), content));
+                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), content, resourceId));
                 }
 
                 throw new Exception("Error" + result.StatusCode.ToString());
@@ -284,11 +285,11 @@
                 var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions");
 
                 var method = Convert.ToString(HttpMethod.Delete);
-                OnNavigate(new NavigatingEventArgs(fullUri, method));
+                OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
                 var result = await httpClient.DeleteAsync(fullUri);
 
-                OnNavigated(new NavigatedEventArgs(method, fullUri, result.StatusCode.ToString()));
+                OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, result.StatusCode.ToString()));
 
                 if (result.IsSuccessStatusCode)
                 {
@@ -301,12 +302,12 @@
                     if (errorCode != null)
                     {
                     }
-                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), content));
+                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), content, resourceId));
                 }
                 else
                 {
                     var content = await result.Content.ReadAsStringAsync();
-                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), content));
+                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), content, resourceId));
                 }
 
                 throw new Exception("Error" + result.StatusCode.ToString());
@@ -352,13 +353,13 @@
                     var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions({sessionId})");
 
                     var method = Convert.ToString(HttpMethod.Put);
-                    OnNavigate(new NavigatingEventArgs(fullUri, method));
+                    OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
                     try
                     {
                         var result = httpClient.PutAsync(fullUri, content).Result;
 
-                        OnNavigated(new NavigatedEventArgs(method, fullUri, result.StatusCode.ToString()));
+                        OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, result.StatusCode.ToString()));
 
                         if (result.IsSuccessStatusCode)
                         {
@@ -369,7 +370,7 @@
                         else
                         {
                             var errorText = await result.Content.ReadAsStringAsync();
-                            OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), errorText));
+                            OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), errorText, resourceId));
                             throw new Exception($"Error [{result.StatusCode}] {errorText}");
                         }
 
@@ -422,13 +423,13 @@
                 var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions({sessionId})/MetadataService.Commit");
 
                 var method = Convert.ToString(HttpMethod.Post);
-                OnNavigate(new NavigatingEventArgs(fullUri, method));
+                OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
                 var result = await httpClient.PostAsync(
                     fullUri,
                     new StringContent(JsonConvert.SerializeObject(form), Encoding.UTF8, "application/json"));
 
-                OnNavigated(new NavigatedEventArgs(method, fullUri, result.StatusCode.ToString()));
+                OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, result.StatusCode.ToString()));
 
                 if (result.IsSuccessStatusCode)
                 {
@@ -443,7 +444,7 @@
                 else
                 {
                     var errorText = await result.Content.ReadAsStringAsync();
-                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), errorText));
+                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), errorText, resourceId));
 
                     throw new Exception($"Error [{result.StatusCode}] {errorText}");
                 }
@@ -461,7 +462,7 @@
             PartUploaded?.Invoke(this, e);
         }
 
-        private void OnNavigate(NavigatingEventArgs e)
+        private void OnNavigating(NavigatingEventArgs e)
         {
             Navigating?.Invoke(this, e);
         }
