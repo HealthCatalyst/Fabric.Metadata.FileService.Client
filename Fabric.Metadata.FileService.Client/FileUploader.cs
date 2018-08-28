@@ -68,8 +68,8 @@
             OnFileUploadStarted(new FileUploadStartedEventArgs(resourceId, uploadSession.SessionId, fileName, countOfFileParts));
 
             var fileParts = await fileSplitter.SplitFile(filePath, fileName, uploadSession.FileUploadChunkSizeInBytes,
-                uploadSession.FileUploadMaxFileSizeInMegabytes, 
-                (stream, part) => UploadFilePartStreamAsync(stream, part, mdsBaseUrl, accessToken, resourceId, uploadSession.SessionId, fileName, fullFileSize, countOfFileParts) );
+                uploadSession.FileUploadMaxFileSizeInMegabytes,
+                (stream, part) => UploadFilePartStreamAsync(stream, part, mdsBaseUrl, accessToken, resourceId, uploadSession.SessionId, fileName, fullFileSize, countOfFileParts));
 
             await CommitAsync(mdsBaseUrl, accessToken, resourceId, uploadSession.SessionId, fileName, hashForFile,
                 fullFileSize, fileParts);
@@ -113,31 +113,21 @@
             if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var httpClient = CreateHttpClient(accessToken))
+            using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
             {
-                var baseUri = new Uri(mdsBaseUrl);
-                var fullUri = new Uri(baseUri, $"Files({resourceId})");
+                fileServiceClient.Navigating += (sender, args) => OnNavigating(args);
+                fileServiceClient.Navigated += (sender, args) => OnNavigated(args);
 
-                var method = Convert.ToString(HttpMethod.Head);
-                OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
-
-                var result = await httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, fullUri));
-
-                OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, result.StatusCode.ToString()));
+                var result = await fileServiceClient.CheckFile(resourceId);
 
                 if (result.StatusCode == HttpStatusCode.NoContent)
                 {
-                    var headersLastModified = result.Content.Headers.LastModified;
-                    var headersContentMd5 = result.Content.Headers.ContentMD5;
-                    var contentDispositionFileName = result.Content.Headers.ContentDisposition?.FileName;
-
-                    if (headersContentMd5 != null)
+                    if (result.HashForFileOnServer != null)
                     {
-                        var hashForFileOnServer = Encoding.UTF8.GetString(headersContentMd5);
+                        OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile, result.HashForFileOnServer, result.LastModified, result.FileNameOnServer, hashForFile == result.HashForFileOnServer));
 
-                        OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile, hashForFileOnServer, headersLastModified, contentDispositionFileName, hashForFile == hashForFileOnServer));
-
-                        if (hashForFile == hashForFileOnServer)
+                        if (hashForFile == result.HashForFileOnServer
+                            && Path.GetFileName(filePath) == Path.GetFileName(result.FileNameOnServer))
                         {
                             return true;
                         }
@@ -149,13 +139,13 @@
                 }
                 else
                 {
-                    var content = await result.Content.ReadAsStringAsync();
-                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), content, resourceId));
+                    OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
                 }
             }
 
             return false;
         }
+
         private async Task DownloadFile(string mdsBaseUrl, string accessToken, int resourceId, string utTempPath)
         {
             if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
@@ -240,9 +230,9 @@
                     var clientResponse = JsonConvert.DeserializeObject<UploadSession>(content);
 
                     OnSessionCreated(new SessionCreatedEventArgs(
-                        resourceId, clientResponse.SessionId, clientResponse.FileUploadChunkSizeInBytes, 
-                        clientResponse.FileUploadMaxFileSizeInMegabytes, 
-                        clientResponse.SessionStartedBy, clientResponse.SessionStartedDateTimeUtc, 
+                        resourceId, clientResponse.SessionId, clientResponse.FileUploadChunkSizeInBytes,
+                        clientResponse.FileUploadMaxFileSizeInMegabytes,
+                        clientResponse.SessionStartedBy, clientResponse.SessionStartedDateTimeUtc,
                         clientResponse.FileUploadSessionExpirationInMinutes));
 
                     return clientResponse;
@@ -409,12 +399,12 @@
                         Hash = filehash,
                         Size = fileSize,
                         Parts = utFileParts.Select(p => new FilePart
-                            {
-                                Id = p.Id,
-                                Hash = p.Hash,
-                                Size = p.Size,
-                                Offset = p.Offset
-                            })
+                        {
+                            Id = p.Id,
+                            Hash = p.Hash,
+                            Size = p.Size,
+                            Offset = p.Offset
+                        })
                             .ToList()
                     }
                 };
