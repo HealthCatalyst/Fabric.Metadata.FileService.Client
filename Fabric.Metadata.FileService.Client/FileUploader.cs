@@ -76,11 +76,6 @@
             if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            if (!mdsBaseUrl.EndsWith(@"/"))
-            {
-                mdsBaseUrl += @"/";
-            }
-
             using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
             {
                 fileServiceClient.Navigating += OnNavigatingRelay;
@@ -90,7 +85,7 @@
                 {
                     var result = await fileServiceClient.DownloadFileAsync(resourceId, utTempFolder);
 
-                    if (result.StatusCode == HttpStatusCode.NoContent)
+                    if (result.StatusCode == HttpStatusCode.OK)
                     {
 
                     }
@@ -124,30 +119,33 @@
                 {
                     var result = await fileServiceClient.CheckFileAsync(resourceId);
 
-                    if (result.StatusCode == HttpStatusCode.NoContent)
+                    switch (result.StatusCode)
                     {
-                        if (result.HashForFileOnServer != null)
+                        case HttpStatusCode.NoContent:
                         {
-                            OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile,
-                                result.HashForFileOnServer, result.LastModified,
-                                result.FileNameOnServer, hashForFile == result.HashForFileOnServer));
-
-                            if (hashForFile == result.HashForFileOnServer
-                                && Path.GetFileName(filePath) == Path.GetFileName(result.FileNameOnServer))
+                            if (result.HashForFileOnServer != null)
                             {
-                                return true;
-                            }
-                        }
-                    }
-                    else if (result.StatusCode == HttpStatusCode.NotFound)
-                    {
-                        // this is acceptable response if the file does not exist on the server
-                    }
-                    else
-                    {
-                        OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
-                    }
+                                OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile,
+                                    result.HashForFileOnServer, result.LastModified,
+                                    result.FileNameOnServer, hashForFile == result.HashForFileOnServer));
 
+                                if (hashForFile == result.HashForFileOnServer
+                                    && Path.GetFileName(filePath) == Path.GetFileName(result.FileNameOnServer))
+                                {
+                                    return true;
+                                }
+                            }
+
+                            break;
+                        }
+                        case HttpStatusCode.NotFound:
+                            // this is acceptable response if the file does not exist on the server
+                            break;
+
+                        default:
+                            OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                            throw new Exception("Error" + result.StatusCode.ToString());
+                    }
                 }
                 finally
                 {
@@ -174,21 +172,20 @@
                 {
                     var result = await fileServiceClient.CreateNewUploadSessionAsync(resourceId);
 
-                    if (result.StatusCode == HttpStatusCode.OK)
+                    switch (result.StatusCode)
                     {
-                        OnSessionCreated(new SessionCreatedEventArgs(
-                            resourceId, result.Session.SessionId, result.Session.FileUploadChunkSizeInBytes,
-                            result.Session.FileUploadMaxFileSizeInMegabytes,
-                            result.Session.SessionStartedBy, result.Session.SessionStartedDateTimeUtc,
-                            result.Session.FileUploadSessionExpirationInMinutes));
+                        case HttpStatusCode.OK:
+                            OnSessionCreated(new SessionCreatedEventArgs(
+                                resourceId, result.Session.SessionId, result.Session.FileUploadChunkSizeInBytes,
+                                result.Session.FileUploadMaxFileSizeInMegabytes,
+                                result.Session.SessionStartedBy, result.Session.SessionStartedDateTimeUtc,
+                                result.Session.FileUploadSessionExpirationInMinutes));
 
-                        return result.Session;
+                            return result.Session;
 
-                    }
-                    else
-                    {
-                        OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
-                        throw new Exception("Error" + result.StatusCode.ToString());
+                        default:
+                            OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                            throw new Exception("Error" + result.StatusCode.ToString());
                     }
                 }
                 finally
@@ -214,16 +211,14 @@
                 {
                     var result = await fileServiceClient.DeleteUploadSessionAsync(resourceId);
 
-                    if (result.StatusCode == HttpStatusCode.OK)
+                    switch (result.StatusCode)
                     {
-                        return result.Session;
+                        case HttpStatusCode.OK:
+                            return result.Session;
+                        default:
+                            OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                            throw new Exception("Error" + result.StatusCode.ToString());
                     }
-                    else
-                    {
-                        OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
-                        throw new Exception("Error" + result.StatusCode.ToString());
-                    }
-
                 }
                 finally
                 {
@@ -258,16 +253,17 @@
                 {
                     var result = await fileServiceClient.UploadStreamAsync(resourceId,sessionId,stream,filePart,fileName, fullFileSize, filePartsCount, 1);
 
-                    if (result.StatusCode == HttpStatusCode.OK)
+                    switch (result.StatusCode)
                     {
-                        OnPartUploaded(
-                            new PartUploadedEventArgs(resourceId, sessionId, fileName, filePart, result.StatusCode.ToString(), filePartsCount, result.PartsUploaded));
-                    }
-                    else
-                    {
-                        OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
-                    }
+                        case HttpStatusCode.OK:
+                            OnPartUploaded(
+                                new PartUploadedEventArgs(resourceId, sessionId, fileName, filePart, result.StatusCode.ToString(), filePartsCount, result.PartsUploaded));
+                            break;
 
+                        default:
+                            OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                            throw new Exception("Error" + result.StatusCode.ToString());
+                    }
                 }
                 finally
                 {
@@ -299,19 +295,19 @@
                 {
                     var result = await fileServiceClient.CommitAsync(resourceId,sessionId,filename,fileHash,fileSize, utFileParts);
 
-                    if (result.StatusCode == HttpStatusCode.OK)
+                    switch (result.StatusCode)
                     {
+                        case HttpStatusCode.OK:
+                            OnFileUploadCompleted(new FileUploadCompletedEventArgs(
+                                resourceId, sessionId, filename, result.Session.FileHash,
+                                result.Session.SessionStartedDateTimeUtc, result.Session.SessionFinishedDateTimeUtc,
+                                result.Session.SessionStartedBy));
+                            break;
 
-                        OnFileUploadCompleted(new FileUploadCompletedEventArgs(
-                            resourceId, sessionId, filename, result.Session.FileHash,
-                            result.Session.SessionStartedDateTimeUtc, result.Session.SessionFinishedDateTimeUtc,
-                            result.Session.SessionStartedBy));
+                        default:
+                            OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                            throw new Exception("Error" + result.StatusCode.ToString());
                     }
-                    else
-                    {
-                        OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
-                    }
-
                 }
                 finally
                 {
