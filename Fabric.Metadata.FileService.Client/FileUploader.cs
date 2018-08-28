@@ -3,12 +3,7 @@
     using System;
     using System.Collections.Generic;
     using System.IO;
-    using System.Net.Http;
-    using System.Net.Http.Headers;
-    using System.Text;
     using System.Threading.Tasks;
-    using Newtonsoft.Json;
-    using System.Linq;
     using System.Net;
     using Events;
 
@@ -75,16 +70,10 @@
                 fullFileSize, fileParts);
         }
 
-        private async Task UploadFilePartStreamAsync(Stream stream, FilePart part, string mdsBaseUrl, string accessToken, int resourceId, Guid uploadSessionId, string fileName, long fullFileSize, int totalFileParts)
-        {
-            await InternalUploadStreamAsync(stream, part, mdsBaseUrl, accessToken, resourceId, uploadSessionId, fileName, fullFileSize, totalFileParts);
-        }
-
         public async Task DownloadFileAsync(string accessToken, int resourceId, string utTempFolder, string mdsBaseUrl)
         {
-            if (string.IsNullOrWhiteSpace(accessToken)) throw new ArgumentNullException(nameof(accessToken));
-            if (string.IsNullOrWhiteSpace(utTempFolder)) throw new ArgumentNullException(nameof(utTempFolder));
-            if (string.IsNullOrWhiteSpace(mdsBaseUrl)) throw new ArgumentNullException(nameof(mdsBaseUrl));
+            if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
+            if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
             if (!mdsBaseUrl.EndsWith(@"/"))
@@ -92,19 +81,32 @@
                 mdsBaseUrl += @"/";
             }
 
-            await DownloadFile(mdsBaseUrl, accessToken, resourceId, utTempFolder);
+            using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
+            {
+                fileServiceClient.Navigating += OnNavigatingRelay;
+                fileServiceClient.Navigated += OnNavigatedRelay;
+
+                try
+                {
+                    var result = await fileServiceClient.DownloadFileAsync(resourceId, utTempFolder);
+
+                    if (result.StatusCode == HttpStatusCode.NoContent)
+                    {
+
+                    }
+                    else
+                    {
+                        OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                    }
+
+                }
+                finally
+                {
+                    fileServiceClient.Navigating -= OnNavigatingRelay;
+                    fileServiceClient.Navigated -= OnNavigatedRelay;
+                }
+            }
         }
-
-        private HttpClient CreateHttpClient(string accessToken)
-        {
-            if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
-
-            var httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            return httpClient;
-        }
-
 
         private async Task<bool> CheckIfFileExistsOnServerAsync(string mdsBaseUrl, string accessToken, int resourceId,
             string fileName, string filePath, string hashForFile)
@@ -126,7 +128,9 @@
                     {
                         if (result.HashForFileOnServer != null)
                         {
-                            OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile, result.HashForFileOnServer, result.LastModified, result.FileNameOnServer, hashForFile == result.HashForFileOnServer));
+                            OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile,
+                                result.HashForFileOnServer, result.LastModified,
+                                result.FileNameOnServer, hashForFile == result.HashForFileOnServer));
 
                             if (hashForFile == result.HashForFileOnServer
                                 && Path.GetFileName(filePath) == Path.GetFileName(result.FileNameOnServer))
@@ -153,56 +157,6 @@
             }
 
             return false;
-        }
-
-        private async Task DownloadFile(string mdsBaseUrl, string accessToken, int resourceId, string utTempPath)
-        {
-            if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
-            if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
-            if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
-
-            using (var httpClient = CreateHttpClient(accessToken))
-            {
-                var baseUri = new Uri(mdsBaseUrl);
-                var fullUri = new Uri(baseUri, $"Files({resourceId})");
-
-                var method = Convert.ToString(HttpMethod.Get);
-                OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
-
-                var result = await httpClient.GetAsync(fullUri);
-
-                OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, result.StatusCode.ToString()));
-
-                if (result.IsSuccessStatusCode)
-                {
-                    var headersLastModified = result.Content.Headers.LastModified;
-                    var headersContentMd5 = result.Content.Headers.ContentMD5;
-                    var contentDispositionFileName = result.Content.Headers.ContentDisposition?.FileName;
-
-                    var contentStream = await result.Content.ReadAsStreamAsync();
-
-                    var bufferSize = contentStream.Length;
-
-                    if (contentDispositionFileName != null)
-                    {
-                        var fullPath = Path.Combine(utTempPath, contentDispositionFileName);
-                        using (FileStream destinationStream =
-                            new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: Convert.ToInt32(bufferSize), useAsync: true))
-                        {
-                            await contentStream.CopyToAsync(destinationStream);
-                        }
-                    }
-                }
-                else
-                {
-                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), await result.Content.ReadAsStringAsync(), resourceId));
-                }
-            }
-        }
-
-        private void OnFileChecked(FileCheckedEventArgs e)
-        {
-            FileChecked?.Invoke(this, e);
         }
 
         private async Task<UploadSession> CreateNewUploadSessionAsync(string mdsBaseUrl, string accessToken, int resourceId)
@@ -251,43 +205,36 @@
             if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var httpClient = CreateHttpClient(accessToken))
+            using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
             {
-                var baseUri = new Uri(mdsBaseUrl);
-                var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions");
+                fileServiceClient.Navigating += OnNavigatingRelay;
+                fileServiceClient.Navigated += OnNavigatedRelay;
 
-                var method = Convert.ToString(HttpMethod.Delete);
-                OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
-
-                var result = await httpClient.DeleteAsync(fullUri);
-
-                OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, result.StatusCode.ToString()));
-
-                if (result.IsSuccessStatusCode)
+                try
                 {
-                }
-                else if (result.StatusCode == HttpStatusCode.BadRequest)
-                {
-                    var content = await result.Content.ReadAsStringAsync();
-                    dynamic clientResponse = JsonConvert.DeserializeObject(content);
-                    var errorCode = clientResponse["ErrorCode"] != null ? Convert.ToString(clientResponse["ErrorCode"]) : null;
-                    if (errorCode != null)
+                    var result = await fileServiceClient.DeleteUploadSessionAsync(resourceId);
+
+                    if (result.StatusCode == HttpStatusCode.OK)
                     {
+                        return result.Session;
                     }
-                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), content, resourceId));
-                }
-                else
-                {
-                    var content = await result.Content.ReadAsStringAsync();
-                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), content, resourceId));
-                }
+                    else
+                    {
+                        OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                        throw new Exception("Error" + result.StatusCode.ToString());
+                    }
 
-                throw new Exception("Error" + result.StatusCode.ToString());
+                }
+                finally
+                {
+                    fileServiceClient.Navigating -= OnNavigatingRelay;
+                    fileServiceClient.Navigated -= OnNavigatedRelay;
+                }
             }
         }
 
 
-        private async Task InternalUploadStreamAsync(Stream stream, FilePart filePart, string mdsBaseUrl,
+        private async Task UploadFilePartStreamAsync(Stream stream, FilePart filePart, string mdsBaseUrl,
             string accessToken,
             int resourceId,
             Guid sessionId, string fileName, long fullFileSize, int filePartsCount)
@@ -314,7 +261,7 @@
                     if (result.StatusCode == HttpStatusCode.OK)
                     {
                         OnPartUploaded(
-                            new PartUploadedEventArgs(resourceId, sessionId, fileName, filePart, result.StatusCode.ToString(), filePartsCount, numPartsUploaded));
+                            new PartUploadedEventArgs(resourceId, sessionId, fileName, filePart, result.StatusCode.ToString(), filePartsCount, result.PartsUploaded));
                     }
                     else
                     {
@@ -331,67 +278,46 @@
         }
 
         private async Task CommitAsync(string mdsBaseUrl, string accessToken, int resourceId, Guid sessionId,
-            string filename, string filehash, long fileSize, IList<FilePart> utFileParts)
+            string filename, string fileHash, long fileSize, IList<FilePart> utFileParts)
         {
             if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
             if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
             if (filename == null) throw new ArgumentNullException(nameof(filename));
-            if (filehash == null) throw new ArgumentNullException(nameof(filehash));
+            if (fileHash == null) throw new ArgumentNullException(nameof(fileHash));
             if (utFileParts == null) throw new ArgumentNullException(nameof(utFileParts));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
             if (fileSize <= 0) throw new ArgumentOutOfRangeException(nameof(fileSize));
             if (sessionId == default(Guid)) throw new ArgumentOutOfRangeException(nameof(sessionId));
 
-            using (var httpClient = CreateHttpClient(accessToken))
+
+            using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
             {
-                var form = new
+                fileServiceClient.Navigating += OnNavigatingRelay;
+                fileServiceClient.Navigated += OnNavigatedRelay;
+
+                try
                 {
-                    FileDetail = new
+                    var result = await fileServiceClient.CommitAsync(resourceId,sessionId,filename,fileHash,fileSize, utFileParts);
+
+                    if (result.StatusCode == HttpStatusCode.OK)
                     {
-                        FileName = filename,
-                        Hash = filehash,
-                        Size = fileSize,
-                        Parts = utFileParts.Select(p => new FilePart
-                        {
-                            Id = p.Id,
-                            Hash = p.Hash,
-                            Size = p.Size,
-                            Offset = p.Offset
-                        })
-                            .ToList()
+
+                        OnFileUploadCompleted(new FileUploadCompletedEventArgs(
+                            resourceId, sessionId, filename, result.Session.FileHash,
+                            result.Session.SessionStartedDateTimeUtc, result.Session.SessionFinishedDateTimeUtc,
+                            result.Session.SessionStartedBy));
                     }
-                };
+                    else
+                    {
+                        OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                    }
 
-                var baseUri = new Uri(mdsBaseUrl);
-                var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions({sessionId})/MetadataService.Commit");
-
-                var method = Convert.ToString(HttpMethod.Post);
-                OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
-
-                var result = await httpClient.PostAsync(
-                    fullUri,
-                    new StringContent(JsonConvert.SerializeObject(form), Encoding.UTF8, "application/json"));
-
-                OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, result.StatusCode.ToString()));
-
-                if (result.IsSuccessStatusCode)
-                {
-                    var content = await result.Content.ReadAsStringAsync();
-                    var clientResponse = JsonConvert.DeserializeObject<UploadSession>(content);
-
-                    OnFileUploadCompleted(new FileUploadCompletedEventArgs(
-                        resourceId, sessionId, filename, clientResponse.FileHash,
-                        clientResponse.SessionStartedDateTimeUtc, clientResponse.SessionFinishedDateTimeUtc,
-                        clientResponse.SessionStartedBy));
                 }
-                else
+                finally
                 {
-                    var errorText = await result.Content.ReadAsStringAsync();
-                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), errorText, resourceId));
-
-                    throw new Exception($"Error [{result.StatusCode}] {errorText}");
+                    fileServiceClient.Navigating -= OnNavigatingRelay;
+                    fileServiceClient.Navigated -= OnNavigatedRelay;
                 }
-
             }
         }
 
@@ -438,6 +364,11 @@
         private void OnSessionCreated(SessionCreatedEventArgs e)
         {
             SessionCreated?.Invoke(this, e);
+        }
+
+        private void OnFileChecked(FileCheckedEventArgs e)
+        {
+            FileChecked?.Invoke(this, e);
         }
 
         public void Dispose()
