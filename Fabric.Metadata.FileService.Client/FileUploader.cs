@@ -10,7 +10,7 @@
     using Newtonsoft.Json;
     using System.Linq;
     using System.Net;
-    using Fabric.Metadata.FileService.Client.Events;
+    using Events;
 
     public delegate void NavigatingEventHandler(object sender, NavigatingEventArgs e);
     public delegate void NavigatedEventHandler(object sender, NavigatedEventArgs e);
@@ -52,7 +52,7 @@
             var hashForFile = new MD5FileHasher().CalculateHashForFile(filePath);
 
             // first check if the server already has the file
-            bool fileAlreadyExists = await CheckIfFileExistsOnServer(mdsBaseUrl, accessToken, resourceId, fileName, filePath, hashForFile);
+            bool fileAlreadyExists = await CheckIfFileExistsOnServerAsync(mdsBaseUrl, accessToken, resourceId, fileName, filePath, hashForFile);
 
             if (fileAlreadyExists) return;
 
@@ -106,7 +106,7 @@
         }
 
 
-        private async Task<bool> CheckIfFileExistsOnServer(string mdsBaseUrl, string accessToken, int resourceId,
+        private async Task<bool> CheckIfFileExistsOnServerAsync(string mdsBaseUrl, string accessToken, int resourceId,
             string fileName, string filePath, string hashForFile)
         {
             if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
@@ -115,31 +115,40 @@
 
             using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
             {
-                fileServiceClient.Navigating += (sender, args) => OnNavigating(args);
-                fileServiceClient.Navigated += (sender, args) => OnNavigated(args);
+                fileServiceClient.Navigating += OnNavigatingRelay;
+                fileServiceClient.Navigated += OnNavigatedRelay;
 
-                var result = await fileServiceClient.CheckFile(resourceId);
-
-                if (result.StatusCode == HttpStatusCode.NoContent)
+                try
                 {
-                    if (result.HashForFileOnServer != null)
-                    {
-                        OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile, result.HashForFileOnServer, result.LastModified, result.FileNameOnServer, hashForFile == result.HashForFileOnServer));
+                    var result = await fileServiceClient.CheckFileAsync(resourceId);
 
-                        if (hashForFile == result.HashForFileOnServer
-                            && Path.GetFileName(filePath) == Path.GetFileName(result.FileNameOnServer))
+                    if (result.StatusCode == HttpStatusCode.NoContent)
+                    {
+                        if (result.HashForFileOnServer != null)
                         {
-                            return true;
+                            OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile, result.HashForFileOnServer, result.LastModified, result.FileNameOnServer, hashForFile == result.HashForFileOnServer));
+
+                            if (hashForFile == result.HashForFileOnServer
+                                && Path.GetFileName(filePath) == Path.GetFileName(result.FileNameOnServer))
+                            {
+                                return true;
+                            }
                         }
                     }
+                    else if (result.StatusCode == HttpStatusCode.NotFound)
+                    {
+                        // this is acceptable response if the file does not exist on the server
+                    }
+                    else
+                    {
+                        OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                    }
+
                 }
-                else if (result.StatusCode == HttpStatusCode.NotFound)
+                finally
                 {
-                    // this is acceptable response if the file does not exist on the server
-                }
-                else
-                {
-                    OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                    fileServiceClient.Navigating -= OnNavigatingRelay;
+                    fileServiceClient.Navigated -= OnNavigatedRelay;
                 }
             }
 
@@ -202,67 +211,40 @@
             if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var httpClient = CreateHttpClient(accessToken))
+            using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
             {
-                var form = new
+                fileServiceClient.Navigating += OnNavigatingRelay;
+                fileServiceClient.Navigated += OnNavigatedRelay;
+
+                try
                 {
+                    var result = await fileServiceClient.CreateNewUploadSessionAsync(resourceId);
 
-                };
-
-                var baseUri = new Uri(mdsBaseUrl);
-                var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions");
-
-                var method = Convert.ToString(HttpMethod.Post);
-                OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
-
-                var result = await httpClient.PostAsync(
-                    fullUri,
-                    new StringContent(JsonConvert.SerializeObject(form),
-                        Encoding.UTF8,
-                        "application/json"));
-
-                OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, result.StatusCode.ToString()));
-
-                if (result.IsSuccessStatusCode)
-                {
-                    var content = await result.Content.ReadAsStringAsync();
-
-                    var clientResponse = JsonConvert.DeserializeObject<UploadSession>(content);
-
-                    OnSessionCreated(new SessionCreatedEventArgs(
-                        resourceId, clientResponse.SessionId, clientResponse.FileUploadChunkSizeInBytes,
-                        clientResponse.FileUploadMaxFileSizeInMegabytes,
-                        clientResponse.SessionStartedBy, clientResponse.SessionStartedDateTimeUtc,
-                        clientResponse.FileUploadSessionExpirationInMinutes));
-
-                    return clientResponse;
-                }
-                else if (result.StatusCode == HttpStatusCode.BadRequest)
-                {
-                    var content = await result.Content.ReadAsStringAsync();
-                    dynamic clientResponse = JsonConvert.DeserializeObject(content);
-                    var errorCode = clientResponse["ErrorCode"] != null ? Convert.ToString(clientResponse["ErrorCode"]) : null;
-                    if (errorCode != null)
+                    if (result.StatusCode == HttpStatusCode.OK)
                     {
-                        if (errorCode == Enum.GetName(typeof(FileServiceErrorCode),
-                                FileServiceErrorCode.SessionAlreadyExists))
-                        {
-                            // delete the session and try again
-                            await DeleteUploadSessionAsync(mdsBaseUrl, accessToken, resourceId);
+                        OnSessionCreated(new SessionCreatedEventArgs(
+                            resourceId, result.Session.SessionId, result.Session.FileUploadChunkSizeInBytes,
+                            result.Session.FileUploadMaxFileSizeInMegabytes,
+                            result.Session.SessionStartedBy, result.Session.SessionStartedDateTimeUtc,
+                            result.Session.FileUploadSessionExpirationInMinutes));
 
-                            return await CreateNewUploadSessionAsync(mdsBaseUrl, accessToken, resourceId);
-                        }
+                        return result.Session;
+
+                    }
+                    else
+                    {
+                        OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                        throw new Exception("Error" + result.StatusCode.ToString());
                     }
                 }
-                else
+                finally
                 {
-                    var content = await result.Content.ReadAsStringAsync();
-                    OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), content, resourceId));
+                    fileServiceClient.Navigating -= OnNavigatingRelay;
+                    fileServiceClient.Navigated -= OnNavigatedRelay;
                 }
-
-                throw new Exception("Error" + result.StatusCode.ToString());
             }
         }
+
         private async Task<UploadSession> DeleteUploadSessionAsync(string mdsBaseUrl, string accessToken, int resourceId)
         {
             if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
@@ -305,7 +287,7 @@
         }
 
 
-        private async Task<bool> InternalUploadStreamAsync(Stream stream, FilePart filePart, string mdsBaseUrl,
+        private async Task InternalUploadStreamAsync(Stream stream, FilePart filePart, string mdsBaseUrl,
             string accessToken,
             int resourceId,
             Guid sessionId, string fileName, long fullFileSize, int filePartsCount)
@@ -319,62 +301,33 @@
             if (filePartsCount <= 0) throw new ArgumentOutOfRangeException(nameof(filePartsCount));
             if (sessionId == default(Guid)) throw new ArgumentOutOfRangeException(nameof(sessionId));
 
-            bool rslt = false;
-            using (var httpClient = CreateHttpClient(accessToken))
+
+            using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
             {
-                using (var content = new MultipartFormDataContent())
+                fileServiceClient.Navigating += OnNavigatingRelay;
+                fileServiceClient.Navigated += OnNavigatedRelay;
+
+                try
                 {
-                    stream.Seek(0, SeekOrigin.Begin);
+                    var result = await fileServiceClient.UploadStreamAsync(resourceId,sessionId,stream,filePart,fileName, fullFileSize, filePartsCount, 1);
 
-                    var fileContent = new StreamContent(stream);
-                    fileContent.Headers.ContentDisposition = new
-                        ContentDispositionHeaderValue("attachment")
+                    if (result.StatusCode == HttpStatusCode.OK)
                     {
-                        FileName = fileName
-                    };
-                    fileContent.Headers.ContentRange =
-                        new ContentRangeHeaderValue(filePart.Offset,
-                            filePart.Offset + filePart.Size);
-                    fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-                    fileContent.Headers.ContentMD5 = Encoding.UTF8.GetBytes(filePart.Hash);
-                    content.Add(fileContent);
-
-                    var baseUri = new Uri(mdsBaseUrl);
-                    var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions({sessionId})");
-
-                    var method = Convert.ToString(HttpMethod.Put);
-                    OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
-
-                    try
-                    {
-                        var result = httpClient.PutAsync(fullUri, content).Result;
-
-                        OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, result.StatusCode.ToString()));
-
-                        if (result.IsSuccessStatusCode)
-                        {
-                            numPartsUploaded++;
-                            OnPartUploaded(
-                                new PartUploadedEventArgs(resourceId, sessionId, fileName, filePart, result.StatusCode.ToString(), filePartsCount, numPartsUploaded));
-                        }
-                        else
-                        {
-                            var errorText = await result.Content.ReadAsStringAsync();
-                            OnUploadError(new UploadErrorEventArgs(fullUri, result.StatusCode.ToString(), errorText, resourceId));
-                            throw new Exception($"Error [{result.StatusCode}] {errorText}");
-                        }
-
-                        rslt = true;
+                        OnPartUploaded(
+                            new PartUploadedEventArgs(resourceId, sessionId, fileName, filePart, result.StatusCode.ToString(), filePartsCount, numPartsUploaded));
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        // log error  
-                        rslt = false;
-                        throw;
+                        OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
                     }
+
+                }
+                finally
+                {
+                    fileServiceClient.Navigating -= OnNavigatingRelay;
+                    fileServiceClient.Navigated -= OnNavigatedRelay;
                 }
             }
-            return rslt;
         }
 
         private async Task CommitAsync(string mdsBaseUrl, string accessToken, int resourceId, Guid sessionId,
@@ -442,19 +395,29 @@
             }
         }
 
+        private void OnNavigatedRelay(object sender, NavigatedEventArgs e)
+        {
+            OnNavigated(e);
+        }
+
+        private void OnNavigatingRelay(object sender, NavigatingEventArgs e)
+        {
+            OnNavigating(e);
+        }
+
         private void OnNavigated(NavigatedEventArgs e)
         {
             Navigated?.Invoke(this, e);
         }
 
-        private void OnPartUploaded(PartUploadedEventArgs e)
-        {
-            PartUploaded?.Invoke(this, e);
-        }
-
         private void OnNavigating(NavigatingEventArgs e)
         {
             Navigating?.Invoke(this, e);
+        }
+
+        private void OnPartUploaded(PartUploadedEventArgs e)
+        {
+            PartUploaded?.Invoke(this, e);
         }
 
         private void OnFileUploadCompleted(FileUploadCompletedEventArgs e)
