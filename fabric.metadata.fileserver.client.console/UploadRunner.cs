@@ -67,7 +67,15 @@ namespace fabric.metadata.fileserver.client.console
             Properties.Settings.Default.Save();
 
             var utTempFolder = Path.GetTempPath();
-            await fileUploader.UploadFileAsync(filePath, accessToken, resourceId, mdsv2Url);
+            try
+            {
+                await fileUploader.UploadFileAsync(filePath, accessToken, resourceId, mdsv2Url);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
         }
 
         private void FileUploader_FileChecked(object sender, Fabric.Metadata.FileService.Client.Events.FileCheckedEventArgs e)

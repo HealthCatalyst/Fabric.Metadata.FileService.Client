@@ -189,7 +189,7 @@
         }
 
         /// <summary>
-        /// This method calls PUT Files({resourceId})/UploadSessions
+        /// This method calls PUT Files({resourceId})/UploadSessions({sessionId})
         /// </summary>
         /// <param name="resourceId"></param>
         /// <param name="sessionId"></param>
@@ -214,7 +214,7 @@
             if (filePartsCount < 0) throw new ArgumentOutOfRangeException(nameof(filePartsCount));
 
             var baseUri = new Uri(mdsBaseUrl);
-            var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions");
+            var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions({sessionId})");
 
             var method = Convert.ToString(HttpMethod.Put);
 
@@ -248,6 +248,7 @@
                     case HttpStatusCode.OK:
                         return new UploadStreamResult
                         {
+                            StatusCode = httpResponse.StatusCode,
                             // ReSharper disable once RedundantAssignment
                             PartsUploaded = numPartsUploaded++
                         };
