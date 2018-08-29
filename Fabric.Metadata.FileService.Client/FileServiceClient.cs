@@ -29,7 +29,7 @@
         private readonly HttpClient httpClient;
         private readonly string mdsBaseUrl;
 
-        public FileServiceClient(string accessToken, string mdsBaseUrl)
+        public FileServiceClient(string accessToken, string mdsBaseUrl, HttpMessageHandler httpClientHandler)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
             {
@@ -46,7 +46,7 @@
                 mdsBaseUrl += @"/";
             }
 
-            this.httpClient = this.CreateHttpClient(accessToken);
+            this.httpClient = this.CreateHttpClient(accessToken, httpClientHandler);
             this.mdsBaseUrl = mdsBaseUrl;
         }
 
@@ -488,11 +488,11 @@
             this.httpClient.Dispose();
         }
 
-        private HttpClient CreateHttpClient(string accessToken)
+        private HttpClient CreateHttpClient(string accessToken, HttpMessageHandler httpClientHandler)
         {
             if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
 
-            var createHttpClient = new HttpClient();
+            var createHttpClient = new HttpClient(httpClientHandler);
             createHttpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(ApplicationJsonMediaType));
             createHttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
             return createHttpClient;

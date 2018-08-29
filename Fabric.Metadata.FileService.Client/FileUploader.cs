@@ -5,6 +5,7 @@
     using System.IO;
     using System.Threading.Tasks;
     using System.Net;
+    using System.Net.Http;
     using Events;
 
     public delegate void NavigatingEventHandler(object sender, NavigatingEventArgs e);
@@ -76,7 +77,7 @@
             if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
+            using (var fileServiceClient = CreateFileServiceClient(accessToken, mdsBaseUrl))
             {
                 fileServiceClient.Navigating += OnNavigatingRelay;
                 fileServiceClient.Navigated += OnNavigatedRelay;
@@ -110,7 +111,7 @@
             if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
+            using (var fileServiceClient = CreateFileServiceClient(accessToken, mdsBaseUrl))
             {
                 fileServiceClient.Navigating += OnNavigatingRelay;
                 fileServiceClient.Navigated += OnNavigatedRelay;
@@ -163,7 +164,7 @@
             if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
+            using (var fileServiceClient = CreateFileServiceClient(accessToken, mdsBaseUrl))
             {
                 fileServiceClient.Navigating += OnNavigatingRelay;
                 fileServiceClient.Navigated += OnNavigatedRelay;
@@ -202,7 +203,7 @@
             if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
+            using (var fileServiceClient = CreateFileServiceClient(accessToken, mdsBaseUrl))
             {
                 fileServiceClient.Navigating += OnNavigatingRelay;
                 fileServiceClient.Navigated += OnNavigatedRelay;
@@ -244,7 +245,7 @@
             if (sessionId == default(Guid)) throw new ArgumentOutOfRangeException(nameof(sessionId));
 
 
-            using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
+            using (var fileServiceClient = CreateFileServiceClient(accessToken, mdsBaseUrl))
             {
                 fileServiceClient.Navigating += OnNavigatingRelay;
                 fileServiceClient.Navigated += OnNavigatedRelay;
@@ -286,7 +287,7 @@
             if (sessionId == default(Guid)) throw new ArgumentOutOfRangeException(nameof(sessionId));
 
 
-            using (var fileServiceClient = new FileServiceClient(accessToken, mdsBaseUrl))
+            using (var fileServiceClient = CreateFileServiceClient(accessToken, mdsBaseUrl))
             {
                 fileServiceClient.Navigating += OnNavigatingRelay;
                 fileServiceClient.Navigated += OnNavigatedRelay;
@@ -315,6 +316,10 @@
                     fileServiceClient.Navigated -= OnNavigatedRelay;
                 }
             }
+        }
+
+        public void Dispose()
+        {
         }
 
         private void OnNavigatedRelay(object sender, NavigatedEventArgs e)
@@ -367,8 +372,9 @@
             FileChecked?.Invoke(this, e);
         }
 
-        public void Dispose()
+        private static FileServiceClient CreateFileServiceClient(string accessToken, string mdsBaseUrl)
         {
+            return new FileServiceClient(accessToken, mdsBaseUrl, new HttpClientHandler());
         }
     }
 }
