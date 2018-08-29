@@ -17,7 +17,7 @@
     /// <summary>
     /// This class manages the communication with the DOS File Service
     /// </summary>
-    public class FileServiceClient : IDisposable
+    public class FileServiceClient : IFileServiceClient
     {
         public event NavigatingEventHandler Navigating;
         public event NavigatedEventHandler Navigated;

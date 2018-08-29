@@ -29,6 +29,17 @@
         public event FileCheckedEventHandler FileChecked;
 
         private int numPartsUploaded = 0;
+        private readonly IFileServiceClientFactory fileServiceClientFactory;
+
+        public FileUploader()
+            : this(new FileServiceClientFactory())
+        {
+        }
+
+        public FileUploader(IFileServiceClientFactory fileServiceClientFactory)
+        {
+            this.fileServiceClientFactory = fileServiceClientFactory;
+        }
 
         public async Task UploadFileAsync(string filePath, string accessToken, int resourceId, string mdsBaseUrl)
         {
@@ -123,22 +134,22 @@
                     switch (result.StatusCode)
                     {
                         case HttpStatusCode.NoContent:
-                        {
-                            if (result.HashForFileOnServer != null)
                             {
-                                OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile,
-                                    result.HashForFileOnServer, result.LastModified,
-                                    result.FileNameOnServer, hashForFile == result.HashForFileOnServer));
-
-                                if (hashForFile == result.HashForFileOnServer
-                                    && Path.GetFileName(filePath) == Path.GetFileName(result.FileNameOnServer))
+                                if (result.HashForFileOnServer != null)
                                 {
-                                    return true;
-                                }
-                            }
+                                    OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile,
+                                        result.HashForFileOnServer, result.LastModified,
+                                        result.FileNameOnServer, hashForFile == result.HashForFileOnServer));
 
-                            break;
-                        }
+                                    if (hashForFile == result.HashForFileOnServer
+                                        && Path.GetFileName(filePath) == Path.GetFileName(result.FileNameOnServer))
+                                    {
+                                        return true;
+                                    }
+                                }
+
+                                break;
+                            }
                         case HttpStatusCode.NotFound:
                             // this is acceptable response if the file does not exist on the server
                             break;
@@ -252,7 +263,7 @@
 
                 try
                 {
-                    var result = await fileServiceClient.UploadStreamAsync(resourceId,sessionId,stream,filePart,fileName, fullFileSize, filePartsCount, 1);
+                    var result = await fileServiceClient.UploadStreamAsync(resourceId, sessionId, stream, filePart, fileName, fullFileSize, filePartsCount, 1);
 
                     switch (result.StatusCode)
                     {
@@ -294,7 +305,7 @@
 
                 try
                 {
-                    var result = await fileServiceClient.CommitAsync(resourceId,sessionId,filename,fileHash,fileSize, utFileParts);
+                    var result = await fileServiceClient.CommitAsync(resourceId, sessionId, filename, fileHash, fileSize, utFileParts);
 
                     switch (result.StatusCode)
                     {
@@ -372,9 +383,9 @@
             FileChecked?.Invoke(this, e);
         }
 
-        private static FileServiceClient CreateFileServiceClient(string accessToken, string mdsBaseUrl)
+        private IFileServiceClient CreateFileServiceClient(string accessToken, string mdsBaseUrl)
         {
-            return new FileServiceClient(accessToken, mdsBaseUrl, new HttpClientHandler());
+            return fileServiceClientFactory.CreateFileServiceClient(accessToken, mdsBaseUrl);
         }
     }
 }

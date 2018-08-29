@@ -93,6 +93,15 @@
             Assert.AreEqual(mockResponse.Content.Headers.LastModified, result.LastModified);
             Assert.AreEqual(myHash, result.HashForFileOnServer);
             Assert.AreEqual(myFileName, result.FileNameOnServer);
+
+            handlerMock.Protected()
+                .Verify(
+                    "SendAsync",
+                    Times.Once(),
+                    ItExpr.Is<HttpRequestMessage>(
+                        req => req.Method == HttpMethod.Head
+                               && req.RequestUri == fullUri),
+                    ItExpr.IsAny<CancellationToken>());
         }
     }
 }
