@@ -3,7 +3,12 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>0.2.7</Version>
+    <Version>1.0.0</Version>
+    <Copyright>Health Catalyst</Copyright>
+    <RepositoryUrl>https://github.com/HealthCatalyst/fabric.metadata.fileservice.client</RepositoryUrl>
+    <RepositoryType>Github</RepositoryType>
+    <PackageLicenseUrl>https://github.com/HealthCatalyst/fabric.metadata.fileservice.client/blob/master/LICENSE</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/HealthCatalyst/fabric.metadata.fileservice.client</PackageProjectUrl>
   </PropertyGroup>
 
   <ItemGroup>

@@ -5,7 +5,6 @@
     using System.IO;
     using System.Threading.Tasks;
     using System.Net;
-    using System.Net.Http;
     using Events;
 
     public delegate void NavigatingEventHandler(object sender, NavigatingEventArgs e);
@@ -263,13 +262,15 @@
 
                 try
                 {
-                    var result = await fileServiceClient.UploadStreamAsync(resourceId, sessionId, stream, filePart, fileName, fullFileSize, filePartsCount, 1);
+                    var result = await fileServiceClient.UploadStreamAsync(resourceId, sessionId, stream, filePart, fileName, fullFileSize, filePartsCount, numPartsUploaded);
 
                     switch (result.StatusCode)
                     {
                         case HttpStatusCode.OK:
                             OnPartUploaded(
                                 new PartUploadedEventArgs(resourceId, sessionId, fileName, filePart, result.StatusCode.ToString(), filePartsCount, result.PartsUploaded));
+
+                            numPartsUploaded++;
                             break;
 
                         default:

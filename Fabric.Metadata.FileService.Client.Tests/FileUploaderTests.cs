@@ -1,11 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Fabric.Metadata.FileService.Client.Tests
+﻿namespace Fabric.Metadata.FileService.Client.Tests
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Threading.Tasks;
     using System.IO;
     using System.Net;
     using FileServiceResults;
@@ -79,7 +76,7 @@ namespace Fabric.Metadata.FileService.Client.Tests
             mockFileService.Setup(
                     service => service.UploadStreamAsync(resourceId, sessionId,
                         It.IsAny<Stream>(), It.IsAny<FilePart>(), fileName, fullFileSize, countOfFileParts,
-                        1))
+                        It.IsAny<int>()))
                 .ReturnsAsync(uploadStreamResult);
 
             var commitResult = new CommitResult
@@ -108,7 +105,7 @@ namespace Fabric.Metadata.FileService.Client.Tests
             mockFileService.Verify(
                 service => service.UploadStreamAsync(resourceId, sessionId,
                     It.IsAny<Stream>(), It.IsAny<FilePart>(), fileName, fullFileSize, countOfFileParts,
-                    1),
+                    It.IsAny<int>()),
                 Times.Exactly(countOfFileParts));
 
             mockFileService.Verify(

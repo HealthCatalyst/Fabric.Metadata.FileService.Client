@@ -73,7 +73,5 @@
         /// <param name="resourceId"></param>
         /// <returns></returns>
         Task<DeleteSessionResult> DeleteUploadSessionAsync(int resourceId);
-
-        void Dispose();
     }
 }

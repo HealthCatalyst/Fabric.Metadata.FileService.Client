@@ -26,7 +26,9 @@
         private const string ApplicationJsonMediaType = "application/json";
         private const string ApplicationOctetStreamMediaType = "application/octet-stream";
 
-        private readonly HttpClient httpClient;
+        // make HttpClient static per https://aspnetmonsters.com/2016/08/2016-08-27-httpclientwrong/
+        private static HttpClient _httpClient;
+
         private readonly string mdsBaseUrl;
 
         public FileServiceClient(string accessToken, string mdsBaseUrl, HttpMessageHandler httpClientHandler)
@@ -46,7 +48,11 @@
                 mdsBaseUrl += @"/";
             }
 
-            this.httpClient = this.CreateHttpClient(accessToken, httpClientHandler);
+            if (_httpClient == null)
+            {
+                _httpClient = this.CreateHttpClient(accessToken, httpClientHandler);
+            }
+
             this.mdsBaseUrl = mdsBaseUrl;
         }
 
@@ -66,7 +72,7 @@
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
-            var httpResponse = await httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, fullUri));
+            var httpResponse = await _httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, fullUri));
 
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
 
@@ -136,7 +142,7 @@
 
             };
 
-            var httpResponse = await httpClient.PostAsync(
+            var httpResponse = await _httpClient.PostAsync(
                 fullUri,
                 new StringContent(JsonConvert.SerializeObject(form),
                     Encoding.UTF8,
@@ -239,7 +245,7 @@
 
                 OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
-                var httpResponse = httpClient.PutAsync(fullUri, requestContent).Result;
+                var httpResponse = _httpClient.PutAsync(fullUri, requestContent).Result;
 
                 OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
 
@@ -306,7 +312,7 @@
                 }
             };
 
-            var httpResponse = await httpClient.PostAsync(
+            var httpResponse = await _httpClient.PostAsync(
                 fullUri,
                 new StringContent(JsonConvert.SerializeObject(form),
                     Encoding.UTF8,
@@ -375,7 +381,7 @@
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
-            var httpResponse = await httpClient.GetAsync(fullUri);
+            var httpResponse = await _httpClient.GetAsync(fullUri);
 
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
 
@@ -451,7 +457,7 @@
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
-            var httpResponse = await httpClient.DeleteAsync(fullUri);
+            var httpResponse = await _httpClient.DeleteAsync(fullUri);
 
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
 
@@ -485,7 +491,6 @@
 
         public void Dispose()
         {
-            this.httpClient.Dispose();
         }
 
         private HttpClient CreateHttpClient(string accessToken, HttpMessageHandler httpClientHandler)

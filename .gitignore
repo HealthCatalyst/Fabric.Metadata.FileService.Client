@@ -13,3 +13,8 @@
 /packages
 /Fabric.Metadata.FileService.Client.Tests/bin/Debug
 /Fabric.Metadata.FileService.Client.Tests/bin/Debug/
+/fabric.metadata.fileserver.client.console/bin/Release
+/fabric.metadata.fileserver.client.console/obj/Release
+/Fabric.Metadata.FileService.Client/bin/Release
+/Fabric.Metadata.FileService.Client.Tests/bin/Release
+/Fabric.Metadata.FileService.Client.Tests/obj/Release
