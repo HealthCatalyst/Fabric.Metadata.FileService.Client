@@ -30,8 +30,6 @@ namespace Fabric.Metadata.FileService.Client
 
             var md5FileHasher = new MD5FileHasher();
 
-            bool rslt = false;
-            string baseFileName = Path.GetFileName(filePath);
             // set the size of file chunk we are going to split into  
             long bufferChunkSize = chunkSizeInBytes;
 
@@ -39,10 +37,6 @@ namespace Fabric.Metadata.FileService.Client
             // open the file to read it into chunks  
             using (FileStream fullFileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                // calculate the number of files that will be created  
-                int totalFileParts = 0;
-                totalFileParts = GetCountOfFileParts(bufferChunkSize, fullFileStream.Length);
-
                 int filePartCount = 0;
                 byte[] data = new byte[bufferChunkSize];
 
@@ -50,9 +44,6 @@ namespace Fabric.Metadata.FileService.Client
                 while (fullFileStream.Position < fullFileStream.Length)
                 {
                     long startOffset = fullFileStream.Position;
-
-                    string filePartNameOnly =
-                        $"{baseFileName}.part_{(filePartCount + 1).ToString()}.{totalFileParts.ToString()}";
 
                     var bytesRead = await fullFileStream.ReadAsync(data, 0, Convert.ToInt32(bufferChunkSize));
 
@@ -88,7 +79,7 @@ namespace Fabric.Metadata.FileService.Client
             }
             else
             {
-                float preciseFileParts = ((float) fileLength / (float) bufferChunkSize);
+                float preciseFileParts = (fileLength / (float) bufferChunkSize);
                 totalFileParts = (int) Math.Ceiling(preciseFileParts);
             }
 

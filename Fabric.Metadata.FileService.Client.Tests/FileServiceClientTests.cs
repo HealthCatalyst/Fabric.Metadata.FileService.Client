@@ -49,6 +49,8 @@
         public async Task CheckFileAsyncSuccess()
         {
             // arrange
+            FileServiceClient.ClearHttpClient();
+
             var resourceId = 1;
             var baseUri = new Uri("http://foo/");
             var fullUri = new Uri(baseUri, $"Files({resourceId})");
@@ -108,6 +110,8 @@
         public async Task HandlesCheckFileAsyncWithNetworkHiccup()
         {
             // arrange
+            FileServiceClient.ClearHttpClient();
+
             var resourceId = 1;
             var baseUri = new Uri("http://foo/");
             var fullUri = new Uri(baseUri, $"Files({resourceId})");
@@ -118,7 +122,7 @@
                 Content = new StringContent(string.Empty),
             };
 
-            var headersLastModified = DateTimeOffset.UtcNow;
+            var headersLastModified = DateTimeOffset.Parse("10/20/2018");
 
             mockResponse.Content.Headers.LastModified = headersLastModified;
             var myHash = "MyHash";
@@ -147,11 +151,13 @@
                     if (count < 1)
                     {
                         count++;
-                        return new HttpResponseMessage(HttpStatusCode.OK)
+                        var response = new HttpResponseMessage(HttpStatusCode.OK)
                         {
                             StatusCode = HttpStatusCode.InternalServerError,
                             Content = new StringContent("This is my error"),
                         };
+                        response.Content.Headers.LastModified = DateTimeOffset.Parse("11/11/2017");
+                        return response;
                     }
                     return mockResponse;
                 })
@@ -168,9 +174,9 @@
 
             // assert
             Assert.AreEqual(mockResponse.StatusCode, result.StatusCode);
-            Assert.AreEqual(headersLastModified, result.LastModified);
             Assert.AreEqual(myHash, result.HashForFileOnServer);
             Assert.AreEqual(myFileName, result.FileNameOnServer);
+            Assert.AreEqual(headersLastModified, result.LastModified);
 
             handlerMock.Protected()
                 .Verify(

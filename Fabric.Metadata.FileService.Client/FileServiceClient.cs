@@ -62,6 +62,10 @@
             this.mdsBaseUrl = mdsBaseUrl;
         }
 
+        public static void ClearHttpClient()
+        {
+            _httpClient = null;
+        }
         /// <summary>
         /// This calls HEAD Files({resourceId})
         /// </summary>
