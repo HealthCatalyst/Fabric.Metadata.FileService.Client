@@ -12,6 +12,7 @@
     using System.Net.Http.Headers;
     using System.Text;
     using System.Threading.Tasks;
+    using Polly;
 
     /// <inheritdoc />
     /// <summary>
@@ -25,6 +26,8 @@
         private const string DispositionType = "attachment";
         private const string ApplicationJsonMediaType = "application/json";
         private const string ApplicationOctetStreamMediaType = "application/octet-stream";
+        private const int SecondsBetweenRetries = 2;
+        private const int MaxRetryCount = 3;
 
         // make HttpClient static per https://aspnetmonsters.com/2016/08/2016-08-27-httpclientwrong/
         private static HttpClient _httpClient;
@@ -72,7 +75,11 @@
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
-            var httpResponse = await _httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, fullUri));
+            var httpResponse = await Policy
+                .HandleResult<HttpResponseMessage>(message =>
+                    message.StatusCode != HttpStatusCode.NoContent && message.StatusCode != HttpStatusCode.NotFound)
+                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries), (result, timeSpan, retryCount, context) => { })
+                .ExecuteAsync(() => _httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, fullUri)));
 
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
 
@@ -142,11 +149,16 @@
 
             };
 
-            var httpResponse = await _httpClient.PostAsync(
-                fullUri,
-                new StringContent(JsonConvert.SerializeObject(form),
-                    Encoding.UTF8,
-                    ApplicationJsonMediaType));
+            var httpResponse = await Policy
+                .HandleResult<HttpResponseMessage>(message =>
+                    message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
+                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
+                    (result, timeSpan, retryCount, context) => { })
+                .ExecuteAsync(() => _httpClient.PostAsync(
+                    fullUri,
+                    new StringContent(JsonConvert.SerializeObject(form),
+                        Encoding.UTF8,
+                        ApplicationJsonMediaType)));
 
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
 
@@ -245,7 +257,13 @@
 
                 OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
-                var httpResponse = _httpClient.PutAsync(fullUri, requestContent).Result;
+                var httpResponse = await Policy
+                    .HandleResult<HttpResponseMessage>(message =>
+                        message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
+                    .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
+                        (result, timeSpan, retryCount, context) => { })
+                    // ReSharper disable once AccessToDisposedClosure
+                    .ExecuteAsync(() => _httpClient.PutAsync(fullUri, requestContent));
 
                 OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
 
@@ -312,11 +330,16 @@
                 }
             };
 
-            var httpResponse = await _httpClient.PostAsync(
-                fullUri,
-                new StringContent(JsonConvert.SerializeObject(form),
-                    Encoding.UTF8,
-                    ApplicationJsonMediaType));
+            var httpResponse = await Policy
+                .HandleResult<HttpResponseMessage>(message =>
+                    message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
+                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
+                    (result, timeSpan, retryCount, context) => { })
+                .ExecuteAsync(() => _httpClient.PostAsync(
+                    fullUri,
+                    new StringContent(JsonConvert.SerializeObject(form),
+                        Encoding.UTF8,
+                        ApplicationJsonMediaType)));
 
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
 
@@ -381,7 +404,12 @@
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
-            var httpResponse = await _httpClient.GetAsync(fullUri);
+            var httpResponse = await Policy
+                .HandleResult<HttpResponseMessage>(message =>
+                    message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
+                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
+                    (result, timeSpan, retryCount, context) => { })
+                .ExecuteAsync(() => _httpClient.GetAsync(fullUri));
 
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
 
@@ -457,7 +485,12 @@
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
-            var httpResponse = await _httpClient.DeleteAsync(fullUri);
+            var httpResponse = await Policy
+                .HandleResult<HttpResponseMessage>(message =>
+                    message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
+                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
+                    (result, timeSpan, retryCount, context) => { })
+                .ExecuteAsync(() => _httpClient.DeleteAsync(fullUri));
 
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
 
