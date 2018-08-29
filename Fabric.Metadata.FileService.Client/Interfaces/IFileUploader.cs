@@ -1,7 +1,8 @@
-﻿namespace Fabric.Metadata.FileService.Client
+﻿namespace Fabric.Metadata.FileService.Client.Interfaces
 {
     using System;
     using System.Threading.Tasks;
+    using Events;
 
     public interface IFileUploader : IDisposable
     {

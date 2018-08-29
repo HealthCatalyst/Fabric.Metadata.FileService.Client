@@ -2,6 +2,7 @@
 {
     using System;
     using System.ComponentModel;
+    using Structures;
 
     public class PartUploadedEventArgs : CancelEventArgs
     {

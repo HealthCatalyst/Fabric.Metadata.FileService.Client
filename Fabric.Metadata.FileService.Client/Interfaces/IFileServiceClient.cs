@@ -1,10 +1,12 @@
-﻿namespace Fabric.Metadata.FileService.Client
+﻿namespace Fabric.Metadata.FileService.Client.Interfaces
 {
     using System;
     using System.Collections.Generic;
     using System.IO;
     using System.Threading.Tasks;
+    using Events;
     using FileServiceResults;
+    using Structures;
 
     public interface IFileServiceClient: IDisposable
     {

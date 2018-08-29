@@ -6,8 +6,10 @@
     using System.IO;
     using System.Net;
     using FileServiceResults;
+    using Interfaces;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
     using Moq;
+    using Structures;
 
     [TestClass]
     public class FileUploaderTests

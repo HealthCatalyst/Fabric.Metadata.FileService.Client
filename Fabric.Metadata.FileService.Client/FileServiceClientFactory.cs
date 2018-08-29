@@ -5,6 +5,7 @@ using System.Text;
 namespace Fabric.Metadata.FileService.Client
 {
     using System.Net.Http;
+    using Interfaces;
 
     public class FileServiceClientFactory : IFileServiceClientFactory
     {

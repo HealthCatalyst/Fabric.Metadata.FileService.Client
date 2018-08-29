@@ -1,10 +1,10 @@
-﻿using System;
-using System.IO;
-
-namespace Fabric.Metadata.FileService.Client
+﻿namespace Fabric.Metadata.FileService.Client.Interfaces
 {
+    using System;
     using System.Collections.Generic;
+    using System.IO;
     using System.Threading.Tasks;
+    using Structures;
 
     public interface IFileSplitter
     {

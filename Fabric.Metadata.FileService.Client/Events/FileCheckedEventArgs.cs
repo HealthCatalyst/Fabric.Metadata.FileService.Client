@@ -1,7 +1,7 @@
-﻿using System;
-
-namespace Fabric.Metadata.FileService.Client.Events
+﻿namespace Fabric.Metadata.FileService.Client.Events
 {
+    using System;
+
     public class FileCheckedEventArgs : EventArgs
     {
         public FileCheckedEventArgs(int resourceId, bool wasFileFound, string hashForFile, string hashForFileOnServer,

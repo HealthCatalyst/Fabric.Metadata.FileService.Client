@@ -1,4 +1,4 @@
-﻿namespace Fabric.Metadata.FileService.Client
+﻿namespace Fabric.Metadata.FileService.Client.Structures
 {
     using System;
 

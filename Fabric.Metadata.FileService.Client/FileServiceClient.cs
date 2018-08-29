@@ -12,7 +12,9 @@
     using System.Net.Http.Headers;
     using System.Text;
     using System.Threading.Tasks;
+    using Interfaces;
     using Polly;
+    using Structures;
 
     /// <inheritdoc />
     /// <summary>
@@ -22,6 +24,7 @@
     {
         public event NavigatingEventHandler Navigating;
         public event NavigatedEventHandler Navigated;
+        public event TransientErrorEventHandler TransientError;
 
         private const string DispositionType = "attachment";
         private const string ApplicationJsonMediaType = "application/json";
@@ -78,7 +81,12 @@
             var httpResponse = await Policy
                 .HandleResult<HttpResponseMessage>(message =>
                     message.StatusCode != HttpStatusCode.NoContent && message.StatusCode != HttpStatusCode.NotFound)
-                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries), (result, timeSpan, retryCount, context) => { })
+                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
+                    async (result, timeSpan, retryCount, context) =>
+                    {
+                        var content = await result.Result.Content.ReadAsStringAsync();
+                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
+                    })
                 .ExecuteAsync(() => _httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, fullUri)));
 
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
@@ -153,7 +161,11 @@
                 .HandleResult<HttpResponseMessage>(message =>
                     message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
-                    (result, timeSpan, retryCount, context) => { })
+                    async (result, timeSpan, retryCount, context) =>
+                    {
+                        var content = await result.Result.Content.ReadAsStringAsync();
+                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
+                    })
                 .ExecuteAsync(() => _httpClient.PostAsync(
                     fullUri,
                     new StringContent(JsonConvert.SerializeObject(form),
@@ -261,7 +273,11 @@
                     .HandleResult<HttpResponseMessage>(message =>
                         message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
                     .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
-                        (result, timeSpan, retryCount, context) => { })
+                        async (result, timeSpan, retryCount, context) =>
+                        {
+                            var content = await result.Result.Content.ReadAsStringAsync();
+                            OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
+                        })
                     // ReSharper disable once AccessToDisposedClosure
                     .ExecuteAsync(() => _httpClient.PutAsync(fullUri, requestContent));
 
@@ -334,7 +350,11 @@
                 .HandleResult<HttpResponseMessage>(message =>
                     message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
-                    (result, timeSpan, retryCount, context) => { })
+                    async (result, timeSpan, retryCount, context) =>
+                    {
+                        var content = await result.Result.Content.ReadAsStringAsync();
+                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
+                    })
                 .ExecuteAsync(() => _httpClient.PostAsync(
                     fullUri,
                     new StringContent(JsonConvert.SerializeObject(form),
@@ -408,7 +428,11 @@
                 .HandleResult<HttpResponseMessage>(message =>
                     message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
-                    (result, timeSpan, retryCount, context) => { })
+                    async (result, timeSpan, retryCount, context) =>
+                    {
+                        var content = await result.Result.Content.ReadAsStringAsync();
+                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
+                    })
                 .ExecuteAsync(() => _httpClient.GetAsync(fullUri));
 
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
@@ -489,7 +513,11 @@
                 .HandleResult<HttpResponseMessage>(message =>
                     message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
-                    (result, timeSpan, retryCount, context) => { })
+                    async (result, timeSpan, retryCount, context) =>
+                    {
+                        var content = await result.Result.Content.ReadAsStringAsync();
+                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
+                    })
                 .ExecuteAsync(() => _httpClient.DeleteAsync(fullUri));
 
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
@@ -543,6 +571,10 @@
         private void OnNavigated(NavigatedEventArgs e)
         {
             Navigated?.Invoke(this, e);
+        }
+        private void OnTransientError(TransientErrorEventArgs e)
+        {
+            TransientError?.Invoke(this, e);
         }
     }
 }
