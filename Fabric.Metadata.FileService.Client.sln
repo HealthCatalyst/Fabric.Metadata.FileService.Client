@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Fabric.Metadata.FileService
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "fabric.metadata.fileserver.client.console", "fabric.metadata.fileserver.client.console\fabric.metadata.fileserver.client.console.csproj", "{75E760A3-6029-4BE0-AA7B-2F338510C4C1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fabric.Metadata.FileService.Client.Tests", "Fabric.Metadata.FileService.Client.Tests\Fabric.Metadata.FileService.Client.Tests.csproj", "{6094B73C-CB7B-46D4-B5D1-9D48D05888BF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{75E760A3-6029-4BE0-AA7B-2F338510C4C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{75E760A3-6029-4BE0-AA7B-2F338510C4C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{75E760A3-6029-4BE0-AA7B-2F338510C4C1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6094B73C-CB7B-46D4-B5D1-9D48D05888BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6094B73C-CB7B-46D4-B5D1-9D48D05888BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6094B73C-CB7B-46D4-B5D1-9D48D05888BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6094B73C-CB7B-46D4-B5D1-9D48D05888BF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
