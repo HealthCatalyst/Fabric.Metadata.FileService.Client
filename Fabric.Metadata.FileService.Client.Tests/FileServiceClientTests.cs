@@ -101,7 +101,7 @@
                     "SendAsync",
                     Times.Once(),
                     ItExpr.Is<HttpRequestMessage>(
-                        req => req.Method == HttpMethod.Head
+                        req => req.Method == HttpMethod.Get
                                && req.RequestUri == fullUri),
                     ItExpr.IsAny<CancellationToken>());
         }
@@ -183,7 +183,7 @@
                     "SendAsync",
                     Times.Exactly(2),
                     ItExpr.Is<HttpRequestMessage>(
-                        req => req.Method == HttpMethod.Head
+                        req => req.Method == HttpMethod.Get
                                && req.RequestUri == fullUri),
                     ItExpr.IsAny<CancellationToken>());
         }

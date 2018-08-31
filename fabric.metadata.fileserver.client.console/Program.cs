@@ -12,7 +12,14 @@ namespace fabric.metadata.fileserver.client.console
     {
         static void Main(string[] args)
         {
-            (new UploadRunner().RunAsync()).GetAwaiter().GetResult();
+            try
+            {
+                (new UploadRunner().RunAsync()).GetAwaiter().GetResult();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
 
             Console.WriteLine("Done. Waiting for key to exit...");
             Console.ReadKey();

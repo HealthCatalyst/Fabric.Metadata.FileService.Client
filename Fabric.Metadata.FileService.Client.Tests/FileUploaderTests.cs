@@ -30,7 +30,7 @@
 
             var fileName = "foo.txt";
             string filePath = Path.Combine(Path.GetTempPath(), fileName);
-            File.WriteAllText(fileName, "123");
+            File.WriteAllText(filePath, "123");
             long fullFileSize = new FileInfo(filePath).Length;
             var hashForFile = new MD5FileHasher().CalculateHashForFile(filePath);
 

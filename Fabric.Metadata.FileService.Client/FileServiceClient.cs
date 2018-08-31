@@ -78,7 +78,7 @@
             var baseUri = new Uri(mdsBaseUrl);
             var fullUri = new Uri(baseUri, $"Files({resourceId})");
 
-            var method = Convert.ToString(HttpMethod.Head);
+            var method = Convert.ToString(HttpMethod.Get);
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
@@ -91,7 +91,11 @@
                         var content = await result.Result.Content.ReadAsStringAsync();
                         OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
                     })
-                .ExecuteAsync(() => _httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, fullUri)));
+                .ExecuteAsync(() =>
+                {
+                    var httpRequestMessage = new HttpRequestMessage(HttpMethod.Get, fullUri);
+                    return _httpClient.SendAsync(httpRequestMessage);
+                });
 
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
 
@@ -437,7 +441,13 @@
                         var content = await result.Result.Content.ReadAsStringAsync();
                         OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
                     })
-                .ExecuteAsync(() => _httpClient.GetAsync(fullUri));
+                .ExecuteAsync(() =>
+                {
+                    var httpRequestMessage = new HttpRequestMessage(HttpMethod.Get, fullUri);
+                    httpRequestMessage.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
+                    return _httpClient.SendAsync(httpRequestMessage);
+                });
+
 
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
 
