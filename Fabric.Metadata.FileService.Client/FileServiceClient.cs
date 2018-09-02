@@ -36,23 +36,28 @@
         // make HttpClient static per https://aspnetmonsters.com/2016/08/2016-08-27-httpclientwrong/
         private static HttpClient _httpClient;
         private readonly IAccessTokenRepository accessTokenRepository;
-        private readonly string mdsBaseUrl;
+        private readonly Uri mdsBaseUrl;
 
-        public FileServiceClient(IAccessTokenRepository accessTokenRepository, string mdsBaseUrl, HttpMessageHandler httpClientHandler)
+        public FileServiceClient(IAccessTokenRepository accessTokenRepository, Uri mdsBaseUrl, HttpMessageHandler httpClientHandler)
         {
             if (accessTokenRepository == null)
             {
                 throw new ArgumentNullException(nameof(accessTokenRepository));
             }
 
-            if (string.IsNullOrWhiteSpace(mdsBaseUrl))
+            if (string.IsNullOrWhiteSpace(mdsBaseUrl.ToString()))
             {
                 throw new ArgumentNullException(nameof(mdsBaseUrl));
             }
 
-            if (!mdsBaseUrl.EndsWith(@"/"))
+            if (!mdsBaseUrl.ToString().EndsWith(@"/"))
             {
-                mdsBaseUrl += @"/";
+                mdsBaseUrl = new Uri($@"{mdsBaseUrl}/");
+            }
+
+            if (!mdsBaseUrl.IsWellFormedOriginalString())
+            {
+                throw new InvalidOperationException($"MDS Url, '{mdsBaseUrl}' is not a well formed url.");
             }
 
             this.accessTokenRepository = accessTokenRepository;
@@ -79,8 +84,7 @@
         {
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            var baseUri = new Uri(mdsBaseUrl);
-            var fullUri = new Uri(baseUri, $"Files({resourceId})");
+            var fullUri = new Uri(mdsBaseUrl, $"Files({resourceId})");
 
             var method = Convert.ToString(HttpMethod.Get);
 
@@ -168,8 +172,7 @@
         {
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            var baseUri = new Uri(mdsBaseUrl);
-            var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions");
+            var fullUri = new Uri(this.mdsBaseUrl, $"Files({resourceId})/UploadSessions");
 
             var method = Convert.ToString(HttpMethod.Post);
 
@@ -271,8 +274,7 @@
             if (numPartsUploaded < 0) throw new ArgumentOutOfRangeException(nameof(numPartsUploaded));
             if (filePartsCount < 0) throw new ArgumentOutOfRangeException(nameof(filePartsCount));
 
-            var baseUri = new Uri(mdsBaseUrl);
-            var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions({sessionId})");
+            var fullUri = new Uri(this.mdsBaseUrl, $"Files({resourceId})/UploadSessions({sessionId})");
 
             var method = Convert.ToString(HttpMethod.Put);
 
@@ -358,8 +360,7 @@
         {
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            var baseUri = new Uri(mdsBaseUrl);
-            var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions({sessionId})/MetadataService.Commit");
+            var fullUri = new Uri(this.mdsBaseUrl, $"Files({resourceId})/UploadSessions({sessionId})/MetadataService.Commit");
 
             var method = Convert.ToString(HttpMethod.Post);
 
@@ -462,8 +463,7 @@
         {
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            var baseUri = new Uri(mdsBaseUrl);
-            var fullUri = new Uri(baseUri, $"Files({resourceId})");
+            var fullUri = new Uri(this.mdsBaseUrl, $"Files({resourceId})");
 
             var method = Convert.ToString(HttpMethod.Get);
 
@@ -566,8 +566,7 @@
         {
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            var baseUri = new Uri(mdsBaseUrl);
-            var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions");
+            var fullUri = new Uri(this.mdsBaseUrl, $"Files({resourceId})/UploadSessions");
 
             var method = Convert.ToString(HttpMethod.Delete);
 

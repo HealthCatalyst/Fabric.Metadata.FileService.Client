@@ -26,19 +26,18 @@
         private int numPartsUploaded;
         private readonly IFileServiceClientFactory fileServiceClientFactory;
         private readonly IAccessTokenRepository accessTokenRepository;
-        private readonly string mdsBaseUrl;
+        private readonly Uri mdsBaseUrl;
 
         public FileUploader(
             IAccessTokenRepository accessTokenRepository, 
-            string mdsBaseUrl)
+            Uri mdsBaseUrl)
             : this(new FileServiceClientFactory(), accessTokenRepository, mdsBaseUrl)
         {
         }
 
-        public FileUploader(
-            IFileServiceClientFactory fileServiceClientFactory,
-            IAccessTokenRepository accessTokenRepository, 
-            string mdsBaseUrl)
+        public FileUploader(IFileServiceClientFactory fileServiceClientFactory,
+            IAccessTokenRepository accessTokenRepository,
+            Uri mdsBaseUrl)
         {
             this.fileServiceClientFactory = fileServiceClientFactory;
             // ReSharper disable once JoinNullCheckWithUsage
@@ -49,13 +48,14 @@
 
             this.accessTokenRepository = accessTokenRepository;
 
-            if (!mdsBaseUrl.EndsWith(@"/"))
+            if (!mdsBaseUrl.ToString().EndsWith(@"/"))
             {
-                mdsBaseUrl += @"/";
+                mdsBaseUrl = new Uri($@"{mdsBaseUrl}/"); 
             }
 
+            if (string.IsNullOrWhiteSpace(mdsBaseUrl.ToString())) throw new ArgumentNullException(nameof(mdsBaseUrl));
+
             this.mdsBaseUrl = mdsBaseUrl;
-            if (string.IsNullOrWhiteSpace(mdsBaseUrl)) throw new ArgumentNullException(nameof(mdsBaseUrl));
         }
 
         public async Task UploadFileAsync(int resourceId, string filePath, CancellationToken ctsToken)

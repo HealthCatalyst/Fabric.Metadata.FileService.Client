@@ -18,13 +18,13 @@
         private string accessToken;
         private FileUploader classUnderTest;
         private Mock<IFileServiceClient> mockFileService;
-        private string mdsBaseUrl;
+        private Uri mdsBaseUrl;
 
         [TestInitialize]
         public void TestInitialize()
         {
             this.accessToken = "myAccessToken";
-            this.mdsBaseUrl = "http://foo";
+            this.mdsBaseUrl = new Uri("http://foo");
 
             this.mockFileService = new Mock<IFileServiceClient>();
 
@@ -36,7 +36,7 @@
                 .ReturnsAsync(accessToken);
 
             mockFileServiceFactory.Setup(
-                    service => service.CreateFileServiceClient(It.IsAny<IAccessTokenRepository>(), It.IsAny<string>()))
+                    service => service.CreateFileServiceClient(It.IsAny<IAccessTokenRepository>(), It.IsAny<Uri>()))
                 .Returns(mockFileService.Object);
 
             this.classUnderTest = new FileUploader(mockFileServiceFactory.Object, mockAccessTokenRepository.Object, this.mdsBaseUrl);

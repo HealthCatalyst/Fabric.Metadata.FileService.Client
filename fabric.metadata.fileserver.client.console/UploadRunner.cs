@@ -46,10 +46,11 @@
             Properties.Settings.Default.ResourceId = resourceId;
 
             Console.WriteLine($"Enter url to MDS v2 [ENTER for {Properties.Settings.Default.MdsV2Url}]");
-            var mdsv2Url = Console.ReadLine();
-            if (string.IsNullOrWhiteSpace(mdsv2Url)) mdsv2Url = Properties.Settings.Default.MdsV2Url;
+            var uriString = Console.ReadLine();
+            Uri mdsv2Url = new Uri(uriString);
+            if (string.IsNullOrWhiteSpace(mdsv2Url.ToString())) mdsv2Url = new Uri(Properties.Settings.Default.MdsV2Url);
 
-            Properties.Settings.Default.MdsV2Url = mdsv2Url;
+            Properties.Settings.Default.MdsV2Url = mdsv2Url.ToString();
 
             var fileUploader = new FileUploader(new AccessTokenRepository(accessToken), mdsv2Url);
             fileUploader.Navigating += FileUploader_Navigating;
