@@ -60,7 +60,7 @@
 
             if (_httpClient == null)
             {
-                _httpClient = this.CreateHttpClient(httpClientHandler);
+                _httpClient = CreateHttpClient(httpClientHandler);
             }
 
         }
@@ -69,6 +69,7 @@
         {
             _httpClient = null;
         }
+        /// <inheritdoc />
         /// <summary>
         /// This calls HEAD Files({resourceId})
         /// </summary>
@@ -83,7 +84,7 @@
 
             var method = Convert.ToString(HttpMethod.Get);
 
-            await this.SetAuthorizationHeaderInHttpClient();
+            await this.SetAuthorizationHeaderInHttpClientAsync();
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
@@ -93,6 +94,11 @@
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
                     async (result, timeSpan, retryCount, context) =>
                     {
+                        if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
+                        {
+                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync();
+                        }
+
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
                         OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
@@ -152,6 +158,7 @@
             }
         }
 
+        /// <inheritdoc />
         /// <summary>
         /// This calls POST Files({resourceId})/UploadSessions
         /// </summary>
@@ -166,7 +173,7 @@
 
             var method = Convert.ToString(HttpMethod.Post);
 
-            await this.SetAuthorizationHeaderInHttpClient();
+            await this.SetAuthorizationHeaderInHttpClientAsync();
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
@@ -181,6 +188,11 @@
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
                     async (result, timeSpan, retryCount, context) =>
                     {
+                        if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
+                        {
+                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync();
+                        }
+
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
                         OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
@@ -233,6 +245,7 @@
             }
         }
 
+        /// <inheritdoc />
         /// <summary>
         /// This method calls PUT Files({resourceId})/UploadSessions({sessionId})
         /// </summary>
@@ -282,7 +295,7 @@
                 fileContent.Headers.ContentMD5 = Encoding.UTF8.GetBytes(filePart.Hash);
                 requestContent.Add(fileContent);
 
-                await this.SetAuthorizationHeaderInHttpClient();
+                await this.SetAuthorizationHeaderInHttpClientAsync();
 
                 OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
@@ -294,8 +307,7 @@
                         {
                             if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
                             {
-                                // get a new access token before trying again
-                                // this.SetAuthorizationHeaderInHttpClient(accessToken);
+                                await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync();
                             }
                             var errorContent = await result.Result.Content.ReadAsStringAsync();
                             OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
@@ -330,6 +342,7 @@
             }
         }
 
+        /// <inheritdoc />
         /// <summary>
         /// This calls POST Files({resourceId})/UploadSessions({sessionId})/MetadataService.Commit
         /// </summary>
@@ -350,7 +363,7 @@
 
             var method = Convert.ToString(HttpMethod.Post);
 
-            await this.SetAuthorizationHeaderInHttpClient();
+            await this.SetAuthorizationHeaderInHttpClientAsync();
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
@@ -378,6 +391,11 @@
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
                     async (result, timeSpan, retryCount, context) =>
                     {
+                        if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
+                        {
+                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync();
+                        }
+
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
                         OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
@@ -433,6 +451,7 @@
             }
         }
 
+        /// <inheritdoc />
         /// <summary>
         /// This calls GET Files({resourceId})
         /// </summary>
@@ -448,7 +467,7 @@
 
             var method = Convert.ToString(HttpMethod.Get);
 
-            await this.SetAuthorizationHeaderInHttpClient();
+            await this.SetAuthorizationHeaderInHttpClientAsync();
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
@@ -458,6 +477,11 @@
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
                     async (result, timeSpan, retryCount, context) =>
                     {
+                        if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
+                        {
+                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync();
+                        }
+
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
                         OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
@@ -532,6 +556,7 @@
             }
         }
 
+        /// <inheritdoc />
         /// <summary>
         /// This calls DELETE Files({resourceId})/UploadSessions
         /// </summary>
@@ -546,7 +571,7 @@
 
             var method = Convert.ToString(HttpMethod.Delete);
 
-            await this.SetAuthorizationHeaderInHttpClient();
+            await this.SetAuthorizationHeaderInHttpClientAsync();
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
@@ -556,6 +581,11 @@
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
                     async (result, timeSpan, retryCount, context) =>
                     {
+                        if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
+                        {
+                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync();
+                        }
+
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
                         OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
@@ -594,16 +624,26 @@
         {
         }
 
-        private HttpClient CreateHttpClient(HttpMessageHandler httpClientHandler)
+        private static HttpClient CreateHttpClient(HttpMessageHandler httpClientHandler)
         {
             var httpClient = new HttpClient(httpClientHandler);
             httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(ApplicationJsonMediaType));
             return httpClient;
         }
 
-        private async Task SetAuthorizationHeaderInHttpClient()
+        private async Task SetAuthorizationHeaderInHttpClientAsync()
         {
             var accessToken = await accessTokenRepository.GetAccessTokenAsync();
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                throw new InvalidAccessTokenException(accessToken);
+            }
+
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        }
+        private async Task SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync()
+        {
+            var accessToken = await accessTokenRepository.GetNewAccessTokenAsync();
             if (string.IsNullOrWhiteSpace(accessToken))
             {
                 throw new InvalidAccessTokenException(accessToken);

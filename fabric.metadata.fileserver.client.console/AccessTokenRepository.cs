@@ -23,5 +23,10 @@
         {
             return Task.FromResult(accessToken);
         }
+
+        public Task<string> GetNewAccessTokenAsync()
+        {
+            throw new InvalidOperationException("Previous access token was rejected by the server");
+        }
     }
 }
