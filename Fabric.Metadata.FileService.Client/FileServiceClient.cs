@@ -88,8 +88,8 @@
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
                     async (result, timeSpan, retryCount, context) =>
                     {
-                        var content = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
+                        var errorContent = await result.Result.Content.ReadAsStringAsync();
+                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
                 .ExecuteAsync(() =>
                 {
@@ -97,50 +97,53 @@
                     return _httpClient.SendAsync(httpRequestMessage);
                 });
 
-            OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
+            var content = await httpResponse.Content.ReadAsStringAsync();
+            OnNavigated(
+                new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString(), content));
 
             switch (httpResponse.StatusCode)
             {
                 case HttpStatusCode.NoContent:
+                {
+                    // HEAD returns NoContent on success
+
+                    var headersLastModified = httpResponse.Content.Headers.LastModified;
+                    var headersContentMd5 = httpResponse.Content.Headers.ContentMD5;
+                    var contentDispositionFileName = httpResponse.Content.Headers.ContentDisposition?.FileName;
+
+                    var result = new CheckFileResult
                     {
-                        // HEAD returns NoContent on success
+                        StatusCode = httpResponse.StatusCode,
+                        LastModified = headersLastModified,
+                        FileNameOnServer = contentDispositionFileName,
+                        FullUri = fullUri
+                    };
 
-                        var headersLastModified = httpResponse.Content.Headers.LastModified;
-                        var headersContentMd5 = httpResponse.Content.Headers.ContentMD5;
-                        var contentDispositionFileName = httpResponse.Content.Headers.ContentDisposition?.FileName;
-
-                        var result = new CheckFileResult
-                        {
-                            StatusCode = httpResponse.StatusCode,
-                            LastModified = headersLastModified,
-                            FileNameOnServer = contentDispositionFileName,
-                            FullUri = fullUri
-                        };
-
-                        if (headersContentMd5 != null)
-                        {
-                            result.HashForFileOnServer = Encoding.UTF8.GetString(headersContentMd5);
-                        }
-
-                        return result;
+                    if (headersContentMd5 != null)
+                    {
+                        result.HashForFileOnServer = Encoding.UTF8.GetString(headersContentMd5);
                     }
+
+                    return result;
+                }
                 case HttpStatusCode.NotFound:
+                {
                     // this is acceptable response if the file does not exist on the server
                     return new CheckFileResult
                     {
                         StatusCode = httpResponse.StatusCode,
                         FullUri = fullUri
                     };
+                }
                 default:
+                {
+                    return new CheckFileResult
                     {
-                        var content = await httpResponse.Content.ReadAsStringAsync();
-                        return new CheckFileResult
-                        {
-                            StatusCode = httpResponse.StatusCode,
-                            Error = content,
-                            FullUri = fullUri
-                        };
-                    }
+                        StatusCode = httpResponse.StatusCode,
+                        Error = content,
+                        FullUri = fullUri
+                    };
+                }
             }
         }
 
@@ -171,8 +174,8 @@
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
                     async (result, timeSpan, retryCount, context) =>
                     {
-                        var content = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
+                        var errorContent = await result.Result.Content.ReadAsStringAsync();
+                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
                 .ExecuteAsync(() => _httpClient.PostAsync(
                     fullUri,
@@ -180,14 +183,13 @@
                         Encoding.UTF8,
                         ApplicationJsonMediaType)));
 
-            OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
+            var content = await httpResponse.Content.ReadAsStringAsync();
+            OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString(), content));
 
             switch (httpResponse.StatusCode)
             {
                 case HttpStatusCode.OK:
                     {
-                        var content = await httpResponse.Content.ReadAsStringAsync();
-
                         var clientResponse = JsonConvert.DeserializeObject<UploadSession>(content);
 
                         var result = new CreateSessionResult
@@ -201,7 +203,6 @@
                     }
                 case HttpStatusCode.BadRequest:
                     {
-                        var content = await httpResponse.Content.ReadAsStringAsync();
                         dynamic clientResponse = JsonConvert.DeserializeObject(content);
                         var errorCode = clientResponse["ErrorCode"] != null ? Convert.ToString(clientResponse["ErrorCode"]) : null;
 
@@ -214,15 +215,14 @@
                         };
                     }
                 default:
+                {
+                    return new CreateSessionResult
                     {
-                        var content = await httpResponse.Content.ReadAsStringAsync();
-                        return new CreateSessionResult
-                        {
-                            StatusCode = httpResponse.StatusCode,
-                            Error = content,
-                            FullUri = fullUri
-                        };
-                    }
+                        StatusCode = httpResponse.StatusCode,
+                        Error = content,
+                        FullUri = fullUri
+                    };
+                }
             }
         }
 
@@ -283,26 +283,28 @@
                     .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
                         async (result, timeSpan, retryCount, context) =>
                         {
-                            var content = await result.Result.Content.ReadAsStringAsync();
-                            OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
+                            var errorContent = await result.Result.Content.ReadAsStringAsync();
+                            OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                         })
                     // ReSharper disable once AccessToDisposedClosure
                     .ExecuteAsync(() => _httpClient.PutAsync(fullUri, requestContent));
 
-                OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
+                var content = await httpResponse.Content.ReadAsStringAsync();
+                OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString(), content ));
 
                 switch (httpResponse.StatusCode)
                 {
                     case HttpStatusCode.OK:
+                    {
                         return new UploadStreamResult
                         {
                             StatusCode = httpResponse.StatusCode,
                             // ReSharper disable once RedundantAssignment
                             PartsUploaded = numPartsUploaded++
                         };
+                    }
                     default:
                     {
-                        var content = await httpResponse.Content.ReadAsStringAsync();
                         return new UploadStreamResult
                         {
                             StatusCode = httpResponse.StatusCode,
@@ -360,8 +362,8 @@
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
                     async (result, timeSpan, retryCount, context) =>
                     {
-                        var content = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
+                        var errorContent = await result.Result.Content.ReadAsStringAsync();
+                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
                 .ExecuteAsync(() => _httpClient.PostAsync(
                     fullUri,
@@ -369,14 +371,14 @@
                         Encoding.UTF8,
                         ApplicationJsonMediaType)));
 
-            OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
+            var content = await httpResponse.Content.ReadAsStringAsync();
+
+            OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString(), content));
 
             switch (httpResponse.StatusCode)
             {
                 case HttpStatusCode.OK:
                 {
-                    var content = await httpResponse.Content.ReadAsStringAsync();
-
                     var clientResponse = JsonConvert.DeserializeObject<UploadSession>(content);
 
                     var result = new CommitResult
@@ -390,9 +392,10 @@
                 }
                 case HttpStatusCode.BadRequest:
                 {
-                    var content = await httpResponse.Content.ReadAsStringAsync();
                     dynamic clientResponse = JsonConvert.DeserializeObject(content);
-                    var errorCode = clientResponse["ErrorCode"] != null ? Convert.ToString(clientResponse["ErrorCode"]) : null;
+                    var errorCode = clientResponse["ErrorCode"] != null
+                        ? Convert.ToString(clientResponse["ErrorCode"])
+                        : null;
 
                     return new CommitResult
                     {
@@ -404,7 +407,6 @@
                 }
                 default:
                 {
-                    var content = await httpResponse.Content.ReadAsStringAsync();
                     return new CommitResult
                     {
                         StatusCode = httpResponse.StatusCode,
@@ -438,8 +440,8 @@
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
                     async (result, timeSpan, retryCount, context) =>
                     {
-                        var content = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
+                        var errorContent = await result.Result.Content.ReadAsStringAsync();
+                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
                 .ExecuteAsync(() =>
                 {
@@ -448,8 +450,9 @@
                     return _httpClient.SendAsync(httpRequestMessage);
                 });
 
-
-            OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
+            // we don't want to write the content in this case as the file can be very large
+            OnNavigated(
+                new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString(), string.Empty));
 
             switch (httpResponse.StatusCode)
             {
@@ -480,30 +483,34 @@
                     {
                         var fullPath = Path.Combine(utTempPath, contentDispositionFileName);
                         using (FileStream destinationStream =
-                            new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: Convert.ToInt32(bufferSize), useAsync: true))
+                            new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None,
+                                bufferSize: Convert.ToInt32(bufferSize), useAsync: true))
                         {
                             await contentStream.CopyToAsync(destinationStream);
                         }
                     }
+
                     return result;
                 }
                 case HttpStatusCode.NotFound:
+                {
                     // this is acceptable response if the file does not exist on the server
                     return new CheckFileResult
                     {
                         StatusCode = httpResponse.StatusCode,
                         FullUri = fullUri
                     };
-                default:
-                {
-                    var content = await httpResponse.Content.ReadAsStringAsync();
-                    return new CheckFileResult
-                    {
-                        StatusCode = httpResponse.StatusCode,
-                        Error = content,
-                        FullUri = fullUri
-                    };
                 }
+                default:
+                    {
+                        var content = await httpResponse.Content.ReadAsStringAsync();
+                        return new CheckFileResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            Error = content,
+                            FullUri = fullUri
+                        };
+                    }
             }
         }
 
@@ -529,19 +536,19 @@
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
                     async (result, timeSpan, retryCount, context) =>
                     {
-                        var content = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), content));
+                        var errorContent = await result.Result.Content.ReadAsStringAsync();
+                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
                 .ExecuteAsync(() => _httpClient.DeleteAsync(fullUri));
 
-            OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString()));
+            var content = await httpResponse.Content.ReadAsStringAsync();
+
+            OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString(), content));
 
             switch (httpResponse.StatusCode)
             {
                 case HttpStatusCode.OK:
                 {
-                    var content = await httpResponse.Content.ReadAsStringAsync();
-
                     var uploadSession = JsonConvert.DeserializeObject<UploadSession>(content);
 
                     return new DeleteSessionResult
@@ -553,7 +560,6 @@
                 }
                 default:
                 {
-                    var content = await httpResponse.Content.ReadAsStringAsync();
                     return new DeleteSessionResult
                     {
                         StatusCode = httpResponse.StatusCode,

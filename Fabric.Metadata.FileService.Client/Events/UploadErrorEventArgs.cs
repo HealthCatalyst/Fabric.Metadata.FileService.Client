@@ -10,7 +10,7 @@
             this.FullUri = fullUri;
             this.StatusCode = statusCode;
             this.Response = content;
-            ResourceId = resourceId;
+            this.ResourceId = resourceId;
         }
 
         public string Response { get; set; }
