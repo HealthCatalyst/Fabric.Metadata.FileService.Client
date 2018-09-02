@@ -21,33 +21,47 @@
         public event UploadErrorEventHandler UploadError;
         public event SessionCreatedEventHandler SessionCreated;
         public event FileCheckedEventHandler FileChecked;
+        public event TransientErrorEventHandler TransientError;
 
         private int numPartsUploaded;
         private readonly IFileServiceClientFactory fileServiceClientFactory;
         private readonly IAccessTokenRepository accessTokenRepository;
+        private readonly string mdsBaseUrl;
 
-        public FileUploader(IAccessTokenRepository accessTokenRepository)
-            : this(new FileServiceClientFactory(), accessTokenRepository)
+        public FileUploader(
+            IAccessTokenRepository accessTokenRepository, 
+            string mdsBaseUrl)
+            : this(new FileServiceClientFactory(), accessTokenRepository, mdsBaseUrl)
         {
         }
 
-        public FileUploader(IFileServiceClientFactory fileServiceClientFactory,
-            IAccessTokenRepository accessTokenRepository)
+        public FileUploader(
+            IFileServiceClientFactory fileServiceClientFactory,
+            IAccessTokenRepository accessTokenRepository, 
+            string mdsBaseUrl)
         {
             this.fileServiceClientFactory = fileServiceClientFactory;
-            this.accessTokenRepository = accessTokenRepository ?? throw new ArgumentNullException(nameof(accessTokenRepository));
-        }
+            // ReSharper disable once JoinNullCheckWithUsage
+            if (accessTokenRepository == null)
+            {
+                throw new ArgumentNullException(nameof(accessTokenRepository));
+            }
 
-        public async Task UploadFileAsync(string filePath, int resourceId, string mdsBaseUrl, CancellationToken ctsToken)
-        {
-            if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentNullException(nameof(filePath));
-            if (string.IsNullOrWhiteSpace(mdsBaseUrl)) throw new ArgumentNullException(nameof(mdsBaseUrl));
-            if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
+            this.accessTokenRepository = accessTokenRepository;
 
             if (!mdsBaseUrl.EndsWith(@"/"))
             {
                 mdsBaseUrl += @"/";
             }
+
+            this.mdsBaseUrl = mdsBaseUrl;
+            if (string.IsNullOrWhiteSpace(mdsBaseUrl)) throw new ArgumentNullException(nameof(mdsBaseUrl));
+        }
+
+        public async Task UploadFileAsync(int resourceId, string filePath, CancellationToken ctsToken)
+        {
+            if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentNullException(nameof(filePath));
+            if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
             var fileSplitter = new FileSplitter();
             var fileName = Path.GetFileName(filePath);
@@ -62,14 +76,14 @@
             }
 
             // first check if the server already has the file
-            bool fileAlreadyExists = await CheckIfFileExistsOnServerAsync(mdsBaseUrl, resourceId, filePath, hashForFile);
+            bool fileAlreadyExists = await CheckIfFileExistsOnServerAsync(resourceId, filePath, hashForFile);
 
             ctsToken.ThrowIfCancellationRequested();
 
             if (fileAlreadyExists) return;
 
             // create new upload session
-            var uploadSession = await CreateNewUploadSessionAsync(mdsBaseUrl, resourceId);
+            var uploadSession = await CreateNewUploadSessionAsync(resourceId);
             ctsToken.ThrowIfCancellationRequested();
 
             numPartsUploaded = 0;
@@ -85,23 +99,23 @@
                 async (stream, part) =>
                 {
                     ctsToken.ThrowIfCancellationRequested();
-                    await this.UploadFilePartStreamAsync(stream, part, mdsBaseUrl, resourceId,
+                    await this.UploadFilePartStreamAsync(stream, part, resourceId,
                         uploadSession.SessionId, fileName, fullFileSize, countOfFileParts);
                 });
 
-            await CommitAsync(mdsBaseUrl, resourceId, uploadSession.SessionId, fileName, hashForFile,
+            await CommitAsync(resourceId, uploadSession.SessionId, fileName, hashForFile,
                 fullFileSize, fileParts);
         }
 
-        public async Task DownloadFileAsync(int resourceId, string utTempFolder, string mdsBaseUrl, CancellationToken ctsToken)
+        public async Task DownloadFileAsync(int resourceId, string utTempFolder, CancellationToken ctsToken)
         {
-            if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var fileServiceClient = CreateFileServiceClient(mdsBaseUrl))
+            using (var fileServiceClient = CreateFileServiceClient())
             {
                 fileServiceClient.Navigating += OnNavigatingRelay;
                 fileServiceClient.Navigated += OnNavigatedRelay;
+                fileServiceClient.TransientError += OnTransientErrorRelay;
 
                 try
                 {
@@ -120,19 +134,20 @@
                 {
                     fileServiceClient.Navigating -= OnNavigatingRelay;
                     fileServiceClient.Navigated -= OnNavigatedRelay;
+                    fileServiceClient.TransientError -= OnTransientErrorRelay;
                 }
             }
         }
 
-        private async Task<bool> CheckIfFileExistsOnServerAsync(string mdsBaseUrl, int resourceId, string filePath, string hashForFile)
+        private async Task<bool> CheckIfFileExistsOnServerAsync(int resourceId, string filePath, string hashForFile)
         {
-            if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var fileServiceClient = CreateFileServiceClient(mdsBaseUrl))
+            using (var fileServiceClient = CreateFileServiceClient())
             {
                 fileServiceClient.Navigating += OnNavigatingRelay;
                 fileServiceClient.Navigated += OnNavigatedRelay;
+                fileServiceClient.TransientError += OnTransientErrorRelay;
 
                 try
                 {
@@ -170,21 +185,22 @@
                 {
                     fileServiceClient.Navigating -= OnNavigatingRelay;
                     fileServiceClient.Navigated -= OnNavigatedRelay;
+                    fileServiceClient.TransientError -= OnTransientErrorRelay;
                 }
             }
 
             return false;
         }
 
-        private async Task<UploadSession> CreateNewUploadSessionAsync(string mdsBaseUrl, int resourceId)
+        private async Task<UploadSession> CreateNewUploadSessionAsync(int resourceId)
         {
-            if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var fileServiceClient = CreateFileServiceClient(mdsBaseUrl))
+            using (var fileServiceClient = CreateFileServiceClient())
             {
                 fileServiceClient.Navigating += OnNavigatingRelay;
                 fileServiceClient.Navigated += OnNavigatedRelay;
+                fileServiceClient.TransientError += OnTransientErrorRelay;
 
                 try
                 {
@@ -210,20 +226,21 @@
                 {
                     fileServiceClient.Navigating -= OnNavigatingRelay;
                     fileServiceClient.Navigated -= OnNavigatedRelay;
+                    fileServiceClient.TransientError -= OnTransientErrorRelay;
                 }
             }
         }
 
         // ReSharper disable once UnusedMember.Local
-        private async Task<UploadSession> DeleteUploadSessionAsync(string mdsBaseUrl, int resourceId)
+        private async Task<UploadSession> DeleteUploadSessionAsync(int resourceId)
         {
-            if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var fileServiceClient = CreateFileServiceClient(mdsBaseUrl))
+            using (var fileServiceClient = CreateFileServiceClient())
             {
                 fileServiceClient.Navigating += OnNavigatingRelay;
                 fileServiceClient.Navigated += OnNavigatedRelay;
+                fileServiceClient.TransientError += OnTransientErrorRelay;
 
                 try
                 {
@@ -242,6 +259,7 @@
                 {
                     fileServiceClient.Navigating -= OnNavigatingRelay;
                     fileServiceClient.Navigated -= OnNavigatedRelay;
+                    fileServiceClient.TransientError -= OnTransientErrorRelay;
                 }
             }
         }
@@ -249,8 +267,7 @@
 
         private async Task UploadFilePartStreamAsync(
             Stream stream, 
-            FilePart filePart, 
-            string mdsBaseUrl,
+            FilePart filePart,
             int resourceId,
             Guid sessionId, 
             string fileName, 
@@ -258,17 +275,17 @@
             int filePartsCount)
         {
             if (filePart == null) throw new ArgumentNullException(nameof(filePart));
-            if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
             if (fileName == null) throw new ArgumentNullException(nameof(fileName));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
             if (fullFileSize <= 0) throw new ArgumentOutOfRangeException(nameof(fullFileSize));
             if (filePartsCount <= 0) throw new ArgumentOutOfRangeException(nameof(filePartsCount));
             if (sessionId == default(Guid)) throw new ArgumentOutOfRangeException(nameof(sessionId));
             
-            using (var fileServiceClient = CreateFileServiceClient(mdsBaseUrl))
+            using (var fileServiceClient = CreateFileServiceClient())
             {
                 fileServiceClient.Navigating += OnNavigatingRelay;
                 fileServiceClient.Navigated += OnNavigatedRelay;
+                fileServiceClient.TransientError += OnTransientErrorRelay;
 
                 try
                 {
@@ -292,14 +309,14 @@
                 {
                     fileServiceClient.Navigating -= OnNavigatingRelay;
                     fileServiceClient.Navigated -= OnNavigatedRelay;
+                    fileServiceClient.TransientError -= OnTransientErrorRelay;
                 }
             }
         }
 
-        private async Task CommitAsync(string mdsBaseUrl, int resourceId, Guid sessionId,
+        private async Task CommitAsync(int resourceId, Guid sessionId,
             string filename, string fileHash, long fileSize, IList<FilePart> utFileParts)
         {
-            if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
             if (filename == null) throw new ArgumentNullException(nameof(filename));
             if (fileHash == null) throw new ArgumentNullException(nameof(fileHash));
             if (utFileParts == null) throw new ArgumentNullException(nameof(utFileParts));
@@ -308,10 +325,11 @@
             if (sessionId == default(Guid)) throw new ArgumentOutOfRangeException(nameof(sessionId));
 
 
-            using (var fileServiceClient = CreateFileServiceClient(mdsBaseUrl))
+            using (var fileServiceClient = CreateFileServiceClient())
             {
                 fileServiceClient.Navigating += OnNavigatingRelay;
                 fileServiceClient.Navigated += OnNavigatedRelay;
+                fileServiceClient.TransientError += OnTransientErrorRelay;
 
                 try
                 {
@@ -335,6 +353,7 @@
                 {
                     fileServiceClient.Navigating -= OnNavigatingRelay;
                     fileServiceClient.Navigated -= OnNavigatedRelay;
+                    fileServiceClient.TransientError -= OnTransientErrorRelay;
                 }
             }
         }
@@ -351,6 +370,11 @@
         private void OnNavigatingRelay(object sender, NavigatingEventArgs e)
         {
             OnNavigating(e);
+        }
+
+        private void OnTransientErrorRelay(object sender, TransientErrorEventArgs e)
+        {
+            OnTransientError(e);
         }
 
         private void OnNavigated(NavigatedEventArgs e)
@@ -393,9 +417,14 @@
             FileChecked?.Invoke(this, e);
         }
 
-        private IFileServiceClient CreateFileServiceClient(string mdsBaseUrl)
+        private void OnTransientError(TransientErrorEventArgs e)
         {
-            return fileServiceClientFactory.CreateFileServiceClient(this.accessTokenRepository, mdsBaseUrl);
+            TransientError?.Invoke(this, e);
+        }
+
+        private IFileServiceClient CreateFileServiceClient()
+        {
+            return fileServiceClientFactory.CreateFileServiceClient(this.accessTokenRepository, this.mdsBaseUrl);
         }
     }
 }

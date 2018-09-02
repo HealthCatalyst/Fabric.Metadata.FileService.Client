@@ -51,7 +51,7 @@
 
             Properties.Settings.Default.MdsV2Url = mdsv2Url;
 
-            var fileUploader = new FileUploader(new AccessTokenRepository(accessToken));
+            var fileUploader = new FileUploader(new AccessTokenRepository(accessToken), mdsv2Url);
             fileUploader.Navigating += FileUploader_Navigating;
             fileUploader.Navigated += FileUploader_Navigated;
             fileUploader.PartUploaded += FileUploader_PartUploaded;
@@ -68,7 +68,7 @@
                 var utTempFolder = Path.GetTempPath();
                 try
                 {
-                    await fileUploader.UploadFileAsync(filePath, resourceId, mdsv2Url, cts.Token);
+                    await fileUploader.UploadFileAsync(resourceId, filePath, cts.Token);
                 }
                 catch (Exception e)
                 {

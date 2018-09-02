@@ -12,6 +12,7 @@
     {
         event NavigatingEventHandler Navigating;
         event NavigatedEventHandler Navigated;
+        event TransientErrorEventHandler TransientError;
 
         /// <summary>
         /// This calls HEAD Files({resourceId})

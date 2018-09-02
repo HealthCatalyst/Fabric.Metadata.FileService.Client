@@ -18,11 +18,13 @@
         private string accessToken;
         private FileUploader classUnderTest;
         private Mock<IFileServiceClient> mockFileService;
+        private string mdsBaseUrl;
 
         [TestInitialize]
         public void TestInitialize()
         {
             this.accessToken = "myAccessToken";
+            this.mdsBaseUrl = "http://foo";
 
             this.mockFileService = new Mock<IFileServiceClient>();
 
@@ -37,7 +39,7 @@
                     service => service.CreateFileServiceClient(It.IsAny<IAccessTokenRepository>(), It.IsAny<string>()))
                 .Returns(mockFileService.Object);
 
-            this.classUnderTest = new FileUploader(mockFileServiceFactory.Object, mockAccessTokenRepository.Object);
+            this.classUnderTest = new FileUploader(mockFileServiceFactory.Object, mockAccessTokenRepository.Object, this.mdsBaseUrl);
         }
 
         [TestMethod]
@@ -50,10 +52,7 @@
             long fullFileSize = new FileInfo(filePath).Length;
             var hashForFile = new MD5FileHasher().CalculateHashForFile(filePath);
 
-
             int resourceId = 1;
-            string mdsBaseUrl = "http://foo";
-
             var checkFileResult = new CheckFileResult
             {
                 StatusCode = HttpStatusCode.NoContent,
@@ -111,7 +110,7 @@
             // act
             using (CancellationTokenSource cts = new CancellationTokenSource())
             {
-                await this.classUnderTest.UploadFileAsync(filePath, resourceId, mdsBaseUrl, cts.Token);
+                await this.classUnderTest.UploadFileAsync(resourceId, filePath, cts.Token);
             }
 
             // assert
@@ -146,7 +145,6 @@
             var hashForFile = new MD5FileHasher().CalculateHashForFile(filePath);
 
             int resourceId = 1;
-            string mdsBaseUrl = "http://foo";
 
             var checkFileResult = new CheckFileResult
             {
@@ -211,7 +209,7 @@
             // act
             using (CancellationTokenSource cts = new CancellationTokenSource())
             {
-                await this.classUnderTest.UploadFileAsync(filePath, resourceId, mdsBaseUrl, cts.Token);
+                await this.classUnderTest.UploadFileAsync(resourceId, filePath, cts.Token);
             }
 
             // assert
@@ -228,9 +226,7 @@
             long fullFileSize = new FileInfo(filePath).Length;
             var hashForFile = new MD5FileHasher().CalculateHashForFile(filePath);
 
-
             int resourceId = 1;
-            string mdsBaseUrl = "http://foo";
 
             var checkFileResult = new CheckFileResult
             {
@@ -289,7 +285,7 @@
             // act
             using (CancellationTokenSource cts = new CancellationTokenSource())
             {
-                await this.classUnderTest.UploadFileAsync(filePath, resourceId, mdsBaseUrl, cts.Token);
+                await this.classUnderTest.UploadFileAsync(resourceId, filePath, cts.Token);
             }
 
             // assert
