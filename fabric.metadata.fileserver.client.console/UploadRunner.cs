@@ -1,14 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Configuration;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Fabric.Metadata.FileService.Client;
-
-namespace fabric.metadata.fileserver.client.console
+﻿namespace fabric.metadata.fileserver.client.console
 {
+    using System;
+    using System.IO;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Fabric.Metadata.FileService.Client;
+
     public class UploadRunner
     {
         public async Task RunAsync()
@@ -54,7 +51,7 @@ namespace fabric.metadata.fileserver.client.console
 
             Properties.Settings.Default.MdsV2Url = mdsv2Url;
 
-            var fileUploader = new FileUploader();
+            var fileUploader = new FileUploader(new AccessTokenRepository(accessToken));
             fileUploader.Navigating += FileUploader_Navigating;
             fileUploader.Navigated += FileUploader_Navigated;
             fileUploader.PartUploaded += FileUploader_PartUploaded;
@@ -66,15 +63,18 @@ namespace fabric.metadata.fileserver.client.console
 
             Properties.Settings.Default.Save();
 
-            var utTempFolder = Path.GetTempPath();
-            try
+            using (CancellationTokenSource cts = new CancellationTokenSource())
             {
-                await fileUploader.UploadFileAsync(filePath, accessToken, resourceId, mdsv2Url);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-                throw;
+                var utTempFolder = Path.GetTempPath();
+                try
+                {
+                    await fileUploader.UploadFileAsync(filePath, resourceId, mdsv2Url, cts.Token);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    throw;
+                }
             }
         }
 

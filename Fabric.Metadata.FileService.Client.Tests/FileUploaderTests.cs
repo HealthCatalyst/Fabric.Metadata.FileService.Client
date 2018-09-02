@@ -5,6 +5,7 @@
     using System.Threading.Tasks;
     using System.IO;
     using System.Net;
+    using System.Threading;
     using FileServiceResults;
     using Interfaces;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -26,7 +27,14 @@
                     service => service.CreateFileServiceClient(It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(mockFileService.Object);
 
-            var fileUploader = new FileUploader(mockFileServiceFactory.Object);
+            string accessToken = "myAccessToken";
+
+            var mockAccessTokenRepository = new Mock<IAccessTokenRepository>();
+            mockAccessTokenRepository.Setup(
+                    service => service.GetAccessTokenAsync())
+                .ReturnsAsync(accessToken);
+
+            var fileUploader = new FileUploader(mockFileServiceFactory.Object, mockAccessTokenRepository.Object );
 
             var fileName = "foo.txt";
             string filePath = Path.Combine(Path.GetTempPath(), fileName);
@@ -34,7 +42,7 @@
             long fullFileSize = new FileInfo(filePath).Length;
             var hashForFile = new MD5FileHasher().CalculateHashForFile(filePath);
 
-            string accessToken = "myAccessToken";
+
             int resourceId = 1;
             string mdsBaseUrl = "http://foo";
 
@@ -93,7 +101,10 @@
                 .ReturnsAsync(commitResult);
 
             // act
-            await fileUploader.UploadFileAsync(filePath, accessToken, resourceId, mdsBaseUrl);
+            using (CancellationTokenSource cts = new CancellationTokenSource())
+            {
+                await fileUploader.UploadFileAsync(filePath, resourceId, mdsBaseUrl, cts.Token);
+            }
 
             // assert
             mockFileService.Verify(

@@ -1,6 +1,7 @@
 ﻿namespace Fabric.Metadata.FileService.Client.Interfaces
 {
     using System;
+    using System.Threading;
     using System.Threading.Tasks;
     using Events;
 
@@ -14,7 +15,7 @@
         event UploadErrorEventHandler UploadError;
         event SessionCreatedEventHandler SessionCreated;
         event FileCheckedEventHandler FileChecked;
-        Task UploadFileAsync(string filePath, string accessToken, int resourceId, string mdsBaseUrl);
-        Task DownloadFileAsync(string accessToken, int resourceId, string utTempFolder, string mdsBaseUrl);
+        Task UploadFileAsync(string filePath, int resourceId, string mdsBaseUrl, CancellationToken ctsToken);
+        Task DownloadFileAsync(string accessToken, int resourceId, string utTempFolder, string mdsBaseUrl, CancellationToken ctsToken);
     }
 }

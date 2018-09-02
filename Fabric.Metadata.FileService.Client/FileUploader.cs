@@ -5,6 +5,7 @@
     using System.IO;
     using System.Threading.Tasks;
     using System.Net;
+    using System.Threading;
     using Events;
     using Exceptions;
     using Interfaces;
@@ -21,23 +22,25 @@
         public event SessionCreatedEventHandler SessionCreated;
         public event FileCheckedEventHandler FileChecked;
 
-        private int numPartsUploaded = 0;
+        private int numPartsUploaded;
         private readonly IFileServiceClientFactory fileServiceClientFactory;
+        private readonly IAccessTokenRepository accessTokenRepository;
 
-        public FileUploader()
-            : this(new FileServiceClientFactory())
+        public FileUploader(IAccessTokenRepository accessTokenRepository)
+            : this(new FileServiceClientFactory(), accessTokenRepository)
         {
         }
 
-        public FileUploader(IFileServiceClientFactory fileServiceClientFactory)
+        public FileUploader(IFileServiceClientFactory fileServiceClientFactory,
+            IAccessTokenRepository accessTokenRepository)
         {
             this.fileServiceClientFactory = fileServiceClientFactory;
+            this.accessTokenRepository = accessTokenRepository ?? throw new ArgumentNullException(nameof(accessTokenRepository));
         }
 
-        public async Task UploadFileAsync(string filePath, string accessToken, int resourceId, string mdsBaseUrl)
+        public async Task UploadFileAsync(string filePath, int resourceId, string mdsBaseUrl, CancellationToken ctsToken)
         {
             if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentNullException(nameof(filePath));
-            if (string.IsNullOrWhiteSpace(accessToken)) throw new ArgumentNullException(nameof(accessToken));
             if (string.IsNullOrWhiteSpace(mdsBaseUrl)) throw new ArgumentNullException(nameof(mdsBaseUrl));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
@@ -52,12 +55,22 @@
             var hashForFile = new MD5FileHasher().CalculateHashForFile(filePath);
 
             // first check if the server already has the file
-            bool fileAlreadyExists = await CheckIfFileExistsOnServerAsync(mdsBaseUrl, accessToken, resourceId, fileName, filePath, hashForFile);
+            string accessToken = await this.accessTokenRepository.GetAccessTokenAsync();
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                throw new InvalidAccessTokenException(accessToken);
+            }
+
+            bool fileAlreadyExists = await CheckIfFileExistsOnServerAsync(mdsBaseUrl, accessToken, resourceId, filePath, hashForFile);
+
+            ctsToken.ThrowIfCancellationRequested();
 
             if (fileAlreadyExists) return;
 
             // create new upload session
+            accessToken = await this.accessTokenRepository.GetAccessTokenAsync();
             var uploadSession = await CreateNewUploadSessionAsync(mdsBaseUrl, accessToken, resourceId);
+            ctsToken.ThrowIfCancellationRequested();
 
             numPartsUploaded = 0;
 
@@ -69,13 +82,20 @@
 
             var fileParts = await fileSplitter.SplitFile(filePath, fileName, uploadSession.FileUploadChunkSizeInBytes,
                 uploadSession.FileUploadMaxFileSizeInMegabytes,
-                (stream, part) => UploadFilePartStreamAsync(stream, part, mdsBaseUrl, accessToken, resourceId, uploadSession.SessionId, fileName, fullFileSize, countOfFileParts));
+                async (stream, part) =>
+                {
+                    ctsToken.ThrowIfCancellationRequested();
+                    accessToken = await this.accessTokenRepository.GetAccessTokenAsync();
+                    await this.UploadFilePartStreamAsync(stream, part, mdsBaseUrl, accessToken, resourceId,
+                        uploadSession.SessionId, fileName, fullFileSize, countOfFileParts);
+                });
 
+            accessToken = await this.accessTokenRepository.GetAccessTokenAsync();
             await CommitAsync(mdsBaseUrl, accessToken, resourceId, uploadSession.SessionId, fileName, hashForFile,
                 fullFileSize, fileParts);
         }
 
-        public async Task DownloadFileAsync(string accessToken, int resourceId, string utTempFolder, string mdsBaseUrl)
+        public async Task DownloadFileAsync(string accessToken, int resourceId, string utTempFolder, string mdsBaseUrl, CancellationToken ctsToken)
         {
             if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
             if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
@@ -96,7 +116,7 @@
                     }
                     else
                     {
-                        OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                        OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
                     }
                 }
                 finally
@@ -107,8 +127,7 @@
             }
         }
 
-        private async Task<bool> CheckIfFileExistsOnServerAsync(string mdsBaseUrl, string accessToken, int resourceId,
-            string fileName, string filePath, string hashForFile)
+        private async Task<bool> CheckIfFileExistsOnServerAsync(string mdsBaseUrl, string accessToken, int resourceId, string filePath, string hashForFile)
         {
             if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
             if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
@@ -147,7 +166,7 @@
                             break;
 
                         default:
-                            OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                            OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
                             throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
                     }
                 }
@@ -188,7 +207,7 @@
                             return result.Session;
 
                         default:
-                            OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                            OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
                             throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
                     }
                 }
@@ -200,6 +219,7 @@
             }
         }
 
+        // ReSharper disable once UnusedMember.Local
         private async Task<UploadSession> DeleteUploadSessionAsync(string mdsBaseUrl, string accessToken, int resourceId)
         {
             if (mdsBaseUrl == null) throw new ArgumentNullException(nameof(mdsBaseUrl));
@@ -220,7 +240,7 @@
                         case HttpStatusCode.OK:
                             return result.Session;
                         default:
-                            OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                            OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
                             throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
                     }
                 }
@@ -267,7 +287,7 @@
                             break;
 
                         default:
-                            OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                            OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
                             throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
                     }
                 }
@@ -311,7 +331,7 @@
                             break;
 
                         default:
-                            OnUploadError(new UploadErrorEventArgs(result.FullUri, result.StatusCode.ToString(), result.Error, resourceId));
+                            OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
                             throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
                     }
                 }
