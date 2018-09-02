@@ -7,24 +7,36 @@
     using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
+    using Interfaces;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
     using Moq;
     using Moq.Protected;
-    using Newtonsoft.Json;
 
     [TestClass]
     public class FileServiceClientTests
     {
+        private string accessToken;
+        private Mock<IAccessTokenRepository> mockAccessTokenRepository;
+
+        [TestInitialize]
+        public void TestInitialize()
+        {
+            this.accessToken = "MyAccessToken";
+
+            this.mockAccessTokenRepository = new Mock<IAccessTokenRepository>();
+            mockAccessTokenRepository.Setup(
+                    service => service.GetAccessTokenAsync())
+                .ReturnsAsync(accessToken);
+        }
+
         [TestMethod]
-        public async Task TestPlanHttpClient()
+        public async Task HttpClientWorks()
         {
             var requestUri = new Uri("http://google.com");
             var expectedResponse = "Response text";
 
-            var mockResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(expectedResponse) };
-
-            var handlerMock = new Mock<HttpMessageHandler>(MockBehavior.Strict);
-            handlerMock
+            var mockHttpMessageHandler = new Mock<HttpMessageHandler>(MockBehavior.Strict);
+            mockHttpMessageHandler
                 .Protected()
                 // Setup the PROTECTED method to mock
                 .Setup<Task<HttpResponseMessage>>(
@@ -40,13 +52,13 @@
                 })
                 .Verifiable();
 
-            var httpClient = new HttpClient(handlerMock.Object);
+            var httpClient = new HttpClient(mockHttpMessageHandler.Object);
             var result = await httpClient.GetStringAsync(requestUri).ConfigureAwait(false);
             Assert.AreEqual(expectedResponse, result);
         }
 
         [TestMethod]
-        public async Task CheckFileAsyncSuccess()
+        public async Task CheckFileAsyncPasses()
         {
             // arrange
             FileServiceClient.ClearHttpClient();
@@ -84,10 +96,8 @@
                 .ReturnsAsync(mockResponse)
                 .Verifiable();
 
-            string accessToken = "MyAccessToken";
-
             // act
-            var fileServiceClient = new FileServiceClient(accessToken, baseUri.ToString(), handlerMock.Object);
+            var fileServiceClient = new FileServiceClient(this.mockAccessTokenRepository.Object, baseUri.ToString(), handlerMock.Object);
             var result = await fileServiceClient.CheckFileAsync(resourceId).ConfigureAwait(false);
 
             // assert
@@ -163,10 +173,8 @@
                 })
                 .Verifiable();
 
-            string accessToken = "MyAccessToken";
-
             // act
-            var fileServiceClient = new FileServiceClient(accessToken, baseUri.ToString(), handlerMock.Object);
+            var fileServiceClient = new FileServiceClient(this.mockAccessTokenRepository.Object, baseUri.ToString(), handlerMock.Object);
             fileServiceClient.TransientError +=
                 (sender, args) => Console.WriteLine("Transient Error: " + args.ResultStatusCode + " " + args.Content);
 

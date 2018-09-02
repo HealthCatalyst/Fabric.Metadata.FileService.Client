@@ -16,6 +16,6 @@
         event SessionCreatedEventHandler SessionCreated;
         event FileCheckedEventHandler FileChecked;
         Task UploadFileAsync(string filePath, int resourceId, string mdsBaseUrl, CancellationToken ctsToken);
-        Task DownloadFileAsync(string accessToken, int resourceId, string utTempFolder, string mdsBaseUrl, CancellationToken ctsToken);
+        Task DownloadFileAsync(int resourceId, string utTempFolder, string mdsBaseUrl, CancellationToken ctsToken);
     }
 }

@@ -2,6 +2,6 @@
 {
     public interface IFileServiceClientFactory
     {
-        IFileServiceClient CreateFileServiceClient(string accessToken, string mdsBaseUrl);
+        IFileServiceClient CreateFileServiceClient(IAccessTokenRepository accessTokenRepository, string mdsBaseUrl);
     }
 }

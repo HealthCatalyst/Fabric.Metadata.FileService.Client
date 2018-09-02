@@ -9,9 +9,9 @@ namespace Fabric.Metadata.FileService.Client
 
     public class FileServiceClientFactory : IFileServiceClientFactory
     {
-        public IFileServiceClient CreateFileServiceClient(string accessToken, string mdsBaseUrl)
+        public IFileServiceClient CreateFileServiceClient(IAccessTokenRepository accessTokenRepository, string mdsBaseUrl)
         {
-            return new FileServiceClient(accessToken, mdsBaseUrl, new HttpClientHandler());
+            return new FileServiceClient(accessTokenRepository, mdsBaseUrl, new HttpClientHandler());
         }
     }
 }

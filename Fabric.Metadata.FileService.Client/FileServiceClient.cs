@@ -12,6 +12,7 @@
     using System.Net.Http.Headers;
     using System.Text;
     using System.Threading.Tasks;
+    using Exceptions;
     using Interfaces;
     using Polly;
     using Structures;
@@ -34,14 +35,14 @@
 
         // make HttpClient static per https://aspnetmonsters.com/2016/08/2016-08-27-httpclientwrong/
         private static HttpClient _httpClient;
-
+        private readonly IAccessTokenRepository accessTokenRepository;
         private readonly string mdsBaseUrl;
 
-        public FileServiceClient(string accessToken, string mdsBaseUrl, HttpMessageHandler httpClientHandler)
+        public FileServiceClient(IAccessTokenRepository accessTokenRepository, string mdsBaseUrl, HttpMessageHandler httpClientHandler)
         {
-            if (string.IsNullOrWhiteSpace(accessToken))
+            if (accessTokenRepository == null)
             {
-                throw new ArgumentNullException(nameof(accessToken));
+                throw new ArgumentNullException(nameof(accessTokenRepository));
             }
 
             if (string.IsNullOrWhiteSpace(mdsBaseUrl))
@@ -54,12 +55,14 @@
                 mdsBaseUrl += @"/";
             }
 
+            this.accessTokenRepository = accessTokenRepository;
+            this.mdsBaseUrl = mdsBaseUrl;
+
             if (_httpClient == null)
             {
-                _httpClient = this.CreateHttpClient(accessToken, httpClientHandler);
+                _httpClient = this.CreateHttpClient(httpClientHandler);
             }
 
-            this.mdsBaseUrl = mdsBaseUrl;
         }
 
         public static void ClearHttpClient()
@@ -79,6 +82,8 @@
             var fullUri = new Uri(baseUri, $"Files({resourceId})");
 
             var method = Convert.ToString(HttpMethod.Get);
+
+            await this.SetAuthorizationHeaderInHttpClient();
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
@@ -160,6 +165,8 @@
             var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions");
 
             var method = Convert.ToString(HttpMethod.Post);
+
+            await this.SetAuthorizationHeaderInHttpClient();
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
@@ -275,6 +282,8 @@
                 fileContent.Headers.ContentMD5 = Encoding.UTF8.GetBytes(filePart.Hash);
                 requestContent.Add(fileContent);
 
+                await this.SetAuthorizationHeaderInHttpClient();
+
                 OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
                 var httpResponse = await Policy
@@ -283,6 +292,11 @@
                     .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
                         async (result, timeSpan, retryCount, context) =>
                         {
+                            if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
+                            {
+                                // get a new access token before trying again
+                                // this.SetAuthorizationHeaderInHttpClient(accessToken);
+                            }
                             var errorContent = await result.Result.Content.ReadAsStringAsync();
                             OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                         })
@@ -335,6 +349,8 @@
             var fullUri = new Uri(baseUri, $"Files({resourceId})/UploadSessions({sessionId})/MetadataService.Commit");
 
             var method = Convert.ToString(HttpMethod.Post);
+
+            await this.SetAuthorizationHeaderInHttpClient();
 
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
@@ -432,6 +448,8 @@
 
             var method = Convert.ToString(HttpMethod.Get);
 
+            await this.SetAuthorizationHeaderInHttpClient();
+
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
             var httpResponse = await Policy
@@ -528,6 +546,8 @@
 
             var method = Convert.ToString(HttpMethod.Delete);
 
+            await this.SetAuthorizationHeaderInHttpClient();
+
             OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
 
             var httpResponse = await Policy
@@ -574,14 +594,22 @@
         {
         }
 
-        private HttpClient CreateHttpClient(string accessToken, HttpMessageHandler httpClientHandler)
+        private HttpClient CreateHttpClient(HttpMessageHandler httpClientHandler)
         {
-            if (accessToken == null) throw new ArgumentNullException(nameof(accessToken));
+            var httpClient = new HttpClient(httpClientHandler);
+            httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(ApplicationJsonMediaType));
+            return httpClient;
+        }
 
-            var createHttpClient = new HttpClient(httpClientHandler);
-            createHttpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(ApplicationJsonMediaType));
-            createHttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            return createHttpClient;
+        private async Task SetAuthorizationHeaderInHttpClient()
+        {
+            var accessToken = await accessTokenRepository.GetAccessTokenAsync();
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                throw new InvalidAccessTokenException(accessToken);
+            }
+
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         }
 
         private void OnNavigating(NavigatingEventArgs e)
