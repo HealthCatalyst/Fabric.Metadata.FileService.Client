@@ -5,7 +5,7 @@
 
     public class NavigatingEventArgs : CancelEventArgs
     {
-        public NavigatingEventArgs(int resourceId, Uri fullUri, string method)
+        public NavigatingEventArgs(int resourceId, string method, Uri fullUri)
         {
             this.FullUri = fullUri;
             this.Method = method;

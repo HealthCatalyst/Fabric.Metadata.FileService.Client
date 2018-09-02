@@ -5,7 +5,6 @@
 
     public class SessionCreatedEventArgs : CancelEventArgs
     {
-
         public SessionCreatedEventArgs(int resourceId, Guid sessionId, long chunkSizeInBytes, long maxFileSizeInMegabytes, 
             string sessionStartedBy, DateTime? sessionStartedDateTimeUtc, 
             int sessionExpirationInMinutes)
@@ -19,13 +18,33 @@
             this.ResourceId = resourceId;
         }
 
-        public long MaxFileSizeInMegabytes { get; set; }
-        public string SessionStartedBy { get; }
-        public DateTime? SessionStartedDateTimeUtc { get; }
-        public int SessionExpirationInMinutes { get; }
         public int ResourceId { get; }
-        public long ChunkSizeInBytes { get; set; }
 
         public Guid SessionId { get; set; }
+
+        /// <summary>
+        /// Maximum file size allowed by the server
+        /// </summary>
+        public long MaxFileSizeInMegabytes { get; set; }
+        
+        /// <summary>
+        /// What user started the upload session
+        /// </summary>
+        public string SessionStartedBy { get; }
+
+        /// <summary>
+        /// When was the upload session started
+        /// </summary>
+        public DateTime? SessionStartedDateTimeUtc { get; }
+
+        /// <summary>
+        /// How long a session is allowed to exist
+        /// </summary>
+        public int SessionExpirationInMinutes { get; }
+
+        /// <summary>
+        /// What chunk size to use
+        /// </summary>
+        public long ChunkSizeInBytes { get; set; }
     }
 }

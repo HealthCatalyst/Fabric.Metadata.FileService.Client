@@ -1,8 +1,7 @@
-﻿using System.ComponentModel;
-
-namespace Fabric.Metadata.FileService.Client.Events
+﻿namespace Fabric.Metadata.FileService.Client.Events
 {
     using System;
+    using System.ComponentModel;
 
     public class FileUploadStartedEventArgs : CancelEventArgs
     {

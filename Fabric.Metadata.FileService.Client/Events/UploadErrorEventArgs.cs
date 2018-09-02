@@ -5,11 +5,11 @@
 
     public class UploadErrorEventArgs : CancelEventArgs
     {
-        public UploadErrorEventArgs(int resourceId, Uri fullUri, string statusCode, string content)
+        public UploadErrorEventArgs(int resourceId, Uri fullUri, string statusCode, string response)
         {
             this.FullUri = fullUri;
             this.StatusCode = statusCode;
-            this.Response = content;
+            this.Response = response;
             this.ResourceId = resourceId;
         }
 

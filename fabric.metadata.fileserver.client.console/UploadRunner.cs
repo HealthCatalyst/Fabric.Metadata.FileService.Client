@@ -85,11 +85,11 @@
 
             if (e.DidHashMatch)
             {
-                Console.WriteLine($"File matched: filename(server):[{e.FileNameOnServer}] lastmodified(server):{e.LastModifiedOnServer} Hash(local):[{e.HashForLocalFile}], Hash(server):[{e.HashOnServer}]");
+                Console.WriteLine($"File matched: filename(server):[{e.FileNameOnServer}] lastmodified(server):{e.LastUploadedToServer} Hash(local):[{e.HashForLocalFile}], Hash(server):[{e.HashOnServer}]");
             }
             else
             {
-                Console.WriteLine($"File NOT matched: {fileFound} filename(server): {e.FileNameOnServer} lastmodified(server):{e.LastModifiedOnServer} Hash(local):[{e.HashForLocalFile}], Hash(server):[{e.HashOnServer}]");
+                Console.WriteLine($"File NOT matched: {fileFound} filename(server): {e.FileNameOnServer} lastmodified(server):{e.LastUploadedToServer} Hash(local):[{e.HashForLocalFile}], Hash(server):[{e.HashOnServer}]");
             }
 
         }

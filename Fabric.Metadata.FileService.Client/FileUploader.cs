@@ -339,8 +339,12 @@
                     {
                         case HttpStatusCode.OK:
                             OnFileUploadCompleted(new FileUploadCompletedEventArgs(
-                                resourceId, sessionId, filename, result.Session.FileHash,
-                                result.Session.SessionStartedDateTimeUtc, result.Session.SessionFinishedDateTimeUtc,
+                                resourceId, 
+                                sessionId, 
+                                filename, 
+                                result.Session.FileHash,
+                                result.Session.SessionStartedDateTimeUtc, 
+                                result.Session.SessionFinishedDateTimeUtc,
                                 result.Session.SessionStartedBy));
                             break;
 

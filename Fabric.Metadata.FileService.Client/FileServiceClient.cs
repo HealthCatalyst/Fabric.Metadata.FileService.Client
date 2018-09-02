@@ -90,7 +90,7 @@
 
             await this.SetAuthorizationHeaderInHttpClientAsync();
 
-            OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
+            OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
             var httpResponse = await Policy
                 .HandleResult<HttpResponseMessage>(message =>
@@ -104,7 +104,7 @@
                         }
 
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
+                        OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
                 .ExecuteAsync(() =>
                 {
@@ -178,7 +178,7 @@
 
             await this.SetAuthorizationHeaderInHttpClientAsync();
 
-            OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
+            OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
             var form = new
             {
@@ -197,7 +197,7 @@
                         }
 
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
+                        OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
                 .ExecuteAsync(() => _httpClient.PostAsync(
                     fullUri,
@@ -299,7 +299,7 @@
 
                 await this.SetAuthorizationHeaderInHttpClientAsync();
 
-                OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
+                OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
                 var httpResponse = await Policy
                     .HandleResult<HttpResponseMessage>(message =>
@@ -312,7 +312,7 @@
                                 await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync();
                             }
                             var errorContent = await result.Result.Content.ReadAsStringAsync();
-                            OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
+                            OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                         })
                     // ReSharper disable once AccessToDisposedClosure
                     .ExecuteAsync(() => _httpClient.PutAsync(fullUri, requestContent));
@@ -366,7 +366,7 @@
 
             await this.SetAuthorizationHeaderInHttpClientAsync();
 
-            OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
+            OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
             var form = new
             {
@@ -398,7 +398,7 @@
                         }
 
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
+                        OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
                 .ExecuteAsync(() => _httpClient.PostAsync(
                     fullUri,
@@ -469,7 +469,7 @@
 
             await this.SetAuthorizationHeaderInHttpClientAsync();
 
-            OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
+            OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
             var httpResponse = await Policy
                 .HandleResult<HttpResponseMessage>(message =>
@@ -483,7 +483,7 @@
                         }
 
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
+                        OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
                 .ExecuteAsync(() =>
                 {
@@ -572,7 +572,7 @@
 
             await this.SetAuthorizationHeaderInHttpClientAsync();
 
-            OnNavigating(new NavigatingEventArgs(resourceId, fullUri, method));
+            OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
             var httpResponse = await Policy
                 .HandleResult<HttpResponseMessage>(message =>
@@ -586,7 +586,7 @@
                         }
 
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(method, fullUri, result.Result.StatusCode.ToString(), errorContent));
+                        OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, result.Result.StatusCode.ToString(), errorContent));
                     })
                 .ExecuteAsync(() => _httpClient.DeleteAsync(fullUri));
 

@@ -176,7 +176,7 @@
             // act
             var fileServiceClient = new FileServiceClient(this.mockAccessTokenRepository.Object, baseUri, handlerMock.Object);
             fileServiceClient.TransientError +=
-                (sender, args) => Console.WriteLine("Transient Error: " + args.ResultStatusCode + " " + args.Content);
+                (sender, args) => Console.WriteLine("Transient Error: " + args.StatusCode + " " + args.Response);
 
             var result = await fileServiceClient.CheckFileAsync(resourceId).ConfigureAwait(false);
 

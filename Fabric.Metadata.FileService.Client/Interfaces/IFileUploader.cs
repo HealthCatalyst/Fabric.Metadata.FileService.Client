@@ -15,6 +15,7 @@
         event UploadErrorEventHandler UploadError;
         event SessionCreatedEventHandler SessionCreated;
         event FileCheckedEventHandler FileChecked;
+        event TransientErrorEventHandler TransientError;
 
         Task UploadFileAsync(int resourceId, string filePath, CancellationToken ctsToken);
         Task DownloadFileAsync(int resourceId, string utTempFolder, CancellationToken ctsToken);

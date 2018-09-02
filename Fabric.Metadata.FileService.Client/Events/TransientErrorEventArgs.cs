@@ -4,17 +4,20 @@
 
     public class TransientErrorEventArgs : EventArgs
     {
-        public TransientErrorEventArgs(string method, Uri fullUri, string resultStatusCode, string content)
+        public TransientErrorEventArgs(int resourceId, string method, Uri fullUri, string statusCode,
+            string response)
         {
             this.Method = method;
             this.FullUri = fullUri;
-            this.ResultStatusCode = resultStatusCode;
-            this.Content = content;
+            this.StatusCode = statusCode;
+            this.Response = response;
+            ResourceId = resourceId;
         }
 
         public string Method { get; }
         public Uri FullUri { get; }
-        public string ResultStatusCode { get; }
-        public string Content { get; }
+        public string StatusCode { get; }
+        public string Response { get; }
+        public int ResourceId { get; }
     }
 }
