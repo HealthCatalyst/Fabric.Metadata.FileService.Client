@@ -16,6 +16,8 @@
         event SessionCreatedEventHandler SessionCreated;
         event FileCheckedEventHandler FileChecked;
         event TransientErrorEventHandler TransientError;
+        event AccessTokenRequestedEventHandler AccessTokenRequested;
+        event NewAccessTokenRequestedEventHandler NewAccessTokenRequested;
 
         Task UploadFileAsync(int resourceId, string filePath, CancellationToken ctsToken);
         Task DownloadFileAsync(int resourceId, string utTempFolder, CancellationToken ctsToken);

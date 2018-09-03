@@ -13,6 +13,8 @@
         event NavigatingEventHandler Navigating;
         event NavigatedEventHandler Navigated;
         event TransientErrorEventHandler TransientError;
+        event AccessTokenRequestedEventHandler AccessTokenRequested;
+        event NewAccessTokenRequestedEventHandler NewAccessTokenRequested;
 
         /// <summary>
         /// This calls HEAD Files({resourceId})

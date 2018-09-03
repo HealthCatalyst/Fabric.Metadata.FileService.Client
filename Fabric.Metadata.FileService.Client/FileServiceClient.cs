@@ -26,6 +26,8 @@
         public event NavigatingEventHandler Navigating;
         public event NavigatedEventHandler Navigated;
         public event TransientErrorEventHandler TransientError;
+        public event AccessTokenRequestedEventHandler AccessTokenRequested;
+        public event NewAccessTokenRequestedEventHandler NewAccessTokenRequested;
 
         private const string DispositionType = "attachment";
         private const string ApplicationJsonMediaType = "application/json";
@@ -88,19 +90,21 @@
 
             var method = Convert.ToString(HttpMethod.Get);
 
-            await this.SetAuthorizationHeaderInHttpClientAsync();
+            await this.SetAuthorizationHeaderInHttpClientAsync(resourceId);
 
             OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
             var httpResponse = await Policy
                 .HandleResult<HttpResponseMessage>(message =>
-                    message.StatusCode != HttpStatusCode.NoContent && message.StatusCode != HttpStatusCode.NotFound)
+                    message.StatusCode != HttpStatusCode.NoContent 
+                    && message.StatusCode != HttpStatusCode.NotFound
+                    && message.StatusCode != HttpStatusCode.OK)
                 .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
                     async (result, timeSpan, retryCount, context) =>
                     {
                         if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
                         {
-                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync();
+                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(resourceId);
                         }
 
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
@@ -118,6 +122,11 @@
 
             switch (httpResponse.StatusCode)
             {
+                case HttpStatusCode.OK:
+                {
+                    throw new InvalidOperationException($"The url, {fullUri}, sent back the whole file instead of just the headers");
+                }
+
                 case HttpStatusCode.NoContent:
                 {
                     // HEAD returns NoContent on success
@@ -141,6 +150,7 @@
 
                     return result;
                 }
+
                 case HttpStatusCode.NotFound:
                 {
                     // this is acceptable response if the file does not exist on the server
@@ -176,7 +186,7 @@
 
             var method = Convert.ToString(HttpMethod.Post);
 
-            await this.SetAuthorizationHeaderInHttpClientAsync();
+            await this.SetAuthorizationHeaderInHttpClientAsync(resourceId);
 
             OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
@@ -193,7 +203,7 @@
                     {
                         if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
                         {
-                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync();
+                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(resourceId);
                         }
 
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
@@ -297,7 +307,7 @@
                 fileContent.Headers.ContentMD5 = Encoding.UTF8.GetBytes(filePart.Hash);
                 requestContent.Add(fileContent);
 
-                await this.SetAuthorizationHeaderInHttpClientAsync();
+                await this.SetAuthorizationHeaderInHttpClientAsync(resourceId);
 
                 OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
@@ -309,7 +319,7 @@
                         {
                             if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
                             {
-                                await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync();
+                                await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(resourceId);
                             }
                             var errorContent = await result.Result.Content.ReadAsStringAsync();
                             OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, result.Result.StatusCode.ToString(), errorContent));
@@ -364,7 +374,7 @@
 
             var method = Convert.ToString(HttpMethod.Post);
 
-            await this.SetAuthorizationHeaderInHttpClientAsync();
+            await this.SetAuthorizationHeaderInHttpClientAsync(resourceId);
 
             OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
@@ -394,7 +404,7 @@
                     {
                         if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
                         {
-                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync();
+                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(resourceId);
                         }
 
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
@@ -467,7 +477,7 @@
 
             var method = Convert.ToString(HttpMethod.Get);
 
-            await this.SetAuthorizationHeaderInHttpClientAsync();
+            await this.SetAuthorizationHeaderInHttpClientAsync(resourceId);
 
             OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
@@ -479,7 +489,7 @@
                     {
                         if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
                         {
-                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync();
+                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(resourceId);
                         }
 
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
@@ -570,7 +580,7 @@
 
             var method = Convert.ToString(HttpMethod.Delete);
 
-            await this.SetAuthorizationHeaderInHttpClientAsync();
+            await this.SetAuthorizationHeaderInHttpClientAsync(resourceId);
 
             OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
@@ -582,7 +592,7 @@
                     {
                         if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
                         {
-                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync();
+                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(resourceId);
                         }
 
                         var errorContent = await result.Result.Content.ReadAsStringAsync();
@@ -630,8 +640,10 @@
             return httpClient;
         }
 
-        private async Task SetAuthorizationHeaderInHttpClientAsync()
+        private async Task SetAuthorizationHeaderInHttpClientAsync(int resourceId)
         {
+            OnAccessTokenRequested(new AccessTokenRequestedEventArgs(resourceId));
+
             var accessToken = await accessTokenRepository.GetAccessTokenAsync();
             if (string.IsNullOrWhiteSpace(accessToken))
             {
@@ -640,8 +652,10 @@
 
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         }
-        private async Task SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync()
+        private async Task SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(int resourceId)
         {
+            OnNewAccessTokenRequested(new NewAccessTokenRequestedEventArgs(resourceId));
+
             var accessToken = await accessTokenRepository.GetNewAccessTokenAsync();
             if (string.IsNullOrWhiteSpace(accessToken))
             {
@@ -662,6 +676,16 @@
         private void OnTransientError(TransientErrorEventArgs e)
         {
             TransientError?.Invoke(this, e);
+        }
+
+        private void OnAccessTokenRequested(AccessTokenRequestedEventArgs e)
+        {
+            AccessTokenRequested?.Invoke(this, e);
+        }
+
+        private void OnNewAccessTokenRequested(NewAccessTokenRequestedEventArgs e)
+        {
+            NewAccessTokenRequested?.Invoke(this, e);
         }
     }
 }

@@ -22,6 +22,8 @@
         public event SessionCreatedEventHandler SessionCreated;
         public event FileCheckedEventHandler FileChecked;
         public event TransientErrorEventHandler TransientError;
+        public event AccessTokenRequestedEventHandler AccessTokenRequested;
+        public event NewAccessTokenRequestedEventHandler NewAccessTokenRequested;
 
         private int numPartsUploaded;
         private readonly IFileServiceClientFactory fileServiceClientFactory;
@@ -381,6 +383,17 @@
             OnTransientError(e);
         }
 
+        private void OnAccessTokenRequestedRelay(object sender, AccessTokenRequestedEventArgs e)
+        {
+            OnAccessTokenRequested(e);
+        }
+
+
+        private void OnNewAccessTokenRequestedRelay(object sender, NewAccessTokenRequestedEventArgs e)
+        {
+            OnNewAccessTokenRequested(e);
+        }
+
         private void OnNavigated(NavigatedEventArgs e)
         {
             Navigated?.Invoke(this, e);
@@ -424,6 +437,15 @@
         private void OnTransientError(TransientErrorEventArgs e)
         {
             TransientError?.Invoke(this, e);
+        }
+
+        private void OnAccessTokenRequested(AccessTokenRequestedEventArgs e)
+        {
+            AccessTokenRequested?.Invoke(this, e);
+        }
+        private void OnNewAccessTokenRequested(NewAccessTokenRequestedEventArgs e)
+        {
+            NewAccessTokenRequested?.Invoke(this, e);
         }
 
         private IFileServiceClient CreateFileServiceClient()

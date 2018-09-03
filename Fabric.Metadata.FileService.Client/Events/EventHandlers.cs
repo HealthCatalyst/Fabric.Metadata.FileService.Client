@@ -9,4 +9,6 @@
     public delegate void SessionCreatedEventHandler(object sender, SessionCreatedEventArgs e);
     public delegate void FileCheckedEventHandler(object sender, FileCheckedEventArgs e);
     public delegate void TransientErrorEventHandler(object sender, TransientErrorEventArgs e);
+    public delegate void AccessTokenRequestedEventHandler(object sender, AccessTokenRequestedEventArgs e);
+    public delegate void NewAccessTokenRequestedEventHandler(object sender, NewAccessTokenRequestedEventArgs e);
 }
