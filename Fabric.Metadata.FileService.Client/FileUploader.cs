@@ -16,12 +16,15 @@
     {
         public event NavigatingEventHandler Navigating;
         public event NavigatedEventHandler Navigated;
-        public event PartUploadedEventHandler PartUploaded;
         public event FileUploadStartedEventHandler FileUploadStarted;
-        public event FileUploadCompletedEventHandler FileUploadCompleted;
-        public event UploadErrorEventHandler UploadError;
-        public event SessionCreatedEventHandler SessionCreated;
+        public event CalculatingHashEventHandler CalculatingHash;
         public event FileCheckedEventHandler FileChecked;
+        public event SessionCreatedEventHandler SessionCreated;
+        public event PartUploadedEventHandler PartUploaded;
+        public event FileUploadCompletedEventHandler FileUploadCompleted;
+        public event CommittingEventHandler Committing;
+
+        public event UploadErrorEventHandler UploadError;
         public event TransientErrorEventHandler TransientError;
         public event AccessTokenRequestedEventHandler AccessTokenRequested;
         public event NewAccessTokenRequestedEventHandler NewAccessTokenRequested;
@@ -70,6 +73,7 @@
             var fileSplitter = new FileSplitter();
             var fileName = Path.GetFileName(filePath);
 
+            OnCalculatingHash(new CalculatingHashEventArgs(resourceId, filePath));
             var hashForFile = new MD5FileHasher().CalculateHashForFile(filePath);
 
             // if there is no access token just error out now
@@ -119,6 +123,7 @@
                             await this.UploadFilePartStreamAsync(fileServiceClient, stream, part, resourceId, uploadSession.SessionId, fileName, fullFileSize, countOfFileParts);
                         });
 
+                    OnCommitting(new CommittingEventArgs(resourceId, uploadSession.SessionId, fileName, hashForFile, fullFileSize, fileParts));
                     await CommitAsync(fileServiceClient, resourceId, uploadSession.SessionId, fileName, hashForFile, fullFileSize, fileParts);
                 }
                 finally
@@ -437,6 +442,16 @@
         private void OnNewAccessTokenRequested(NewAccessTokenRequestedEventArgs e)
         {
             NewAccessTokenRequested?.Invoke(this, e);
+        }
+
+        private void OnCalculatingHash(CalculatingHashEventArgs e)
+        {
+            CalculatingHash?.Invoke(this, e);
+        }
+
+        private void OnCommitting(CommittingEventArgs e)
+        {
+            Committing?.Invoke(this,e);
         }
 
         private IFileServiceClient CreateFileServiceClient()

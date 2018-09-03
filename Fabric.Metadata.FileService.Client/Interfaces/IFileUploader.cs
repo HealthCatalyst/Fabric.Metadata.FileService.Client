@@ -18,8 +18,11 @@
         event TransientErrorEventHandler TransientError;
         event AccessTokenRequestedEventHandler AccessTokenRequested;
         event NewAccessTokenRequestedEventHandler NewAccessTokenRequested;
+        event CalculatingHashEventHandler CalculatingHash;
 
         Task UploadFileAsync(int resourceId, string filePath, CancellationToken ctsToken);
         Task DownloadFileAsync(int resourceId, string utTempFolder, CancellationToken ctsToken);
+
+        event CommittingEventHandler Committing;
     }
 }
