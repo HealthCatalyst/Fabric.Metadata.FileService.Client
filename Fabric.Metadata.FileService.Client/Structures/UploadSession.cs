@@ -45,7 +45,7 @@
         /// <summary>
         /// Gets or sets FileUploadSessionExpirationInMinutes
         /// </summary>
-        public int FileUploadSessionExpirationInMinutes { get; set; }
+        public long FileUploadSessionExpirationInMinutes { get; set; }
     }
 
 }

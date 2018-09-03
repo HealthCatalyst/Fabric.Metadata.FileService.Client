@@ -7,14 +7,14 @@
     {
         public SessionCreatedEventArgs(int resourceId, Guid sessionId, long chunkSizeInBytes, long maxFileSizeInMegabytes, 
             string sessionStartedBy, DateTime? sessionStartedDateTimeUtc, 
-            int sessionExpirationInMinutes)
+            long sessionExpirationInMinutes)
         {
             this.SessionId = sessionId;
             this.ChunkSizeInBytes = chunkSizeInBytes;
             this.MaxFileSizeInMegabytes = maxFileSizeInMegabytes;
-            SessionStartedBy = sessionStartedBy;
-            SessionStartedDateTimeUtc = sessionStartedDateTimeUtc;
-            SessionExpirationInMinutes = sessionExpirationInMinutes;
+            this.SessionStartedBy = sessionStartedBy;
+            this.SessionStartedDateTimeUtc = sessionStartedDateTimeUtc;
+            this.SessionExpirationInMinutes = sessionExpirationInMinutes;
             this.ResourceId = resourceId;
         }
 
@@ -40,7 +40,7 @@
         /// <summary>
         /// How long a session is allowed to exist
         /// </summary>
-        public int SessionExpirationInMinutes { get; }
+        public long SessionExpirationInMinutes { get; }
 
         /// <summary>
         /// What chunk size to use

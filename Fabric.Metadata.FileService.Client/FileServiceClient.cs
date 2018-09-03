@@ -285,12 +285,8 @@
                     FileName = fileName
                 };
 
-                // we should really be passing the total length also but Asp.net hsa problems parsing it
-                //fileContent.Headers.ContentRange =
-                //    new ContentRangeHeaderValue(filePart.Offset, filePart.Offset + filePart.Size, fullFileSize);
-
                 fileContent.Headers.ContentRange =
-                    new ContentRangeHeaderValue(filePart.Offset, filePart.Offset + filePart.Size);
+                    new ContentRangeHeaderValue(filePart.Offset, filePart.Offset + filePart.Size - 1, fullFileSize);
 
                 fileContent.Headers.ContentType = new MediaTypeHeaderValue(ApplicationOctetStreamMediaType);
                 fileContent.Headers.ContentMD5 = Encoding.UTF8.GetBytes(filePart.Hash);

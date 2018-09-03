@@ -53,8 +53,8 @@ namespace Fabric.Metadata.FileService.Client
                         var filePart = new FilePart
                         {
                             Id = filePartCount,
-                            Offset = Convert.ToInt32(startOffset),
-                            Size = Convert.ToInt32(memoryStream.Length),
+                            Offset = startOffset,
+                            Size = memoryStream.Length,
                             Hash = md5FileHasher.CalculateHashForStream(memoryStream),
                         };
 
