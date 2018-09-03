@@ -30,6 +30,7 @@
         public event AccessTokenRequestedEventHandler AccessTokenRequested;
         public event NewAccessTokenRequestedEventHandler NewAccessTokenRequested;
 
+        private const int DefaultBufferSize = 4096;
         private const string DispositionType = "attachment";
         private const string ApplicationJsonMediaType = "application/json";
         private const string ApplicationOctetStreamMediaType = "application/octet-stream";
@@ -51,6 +52,8 @@
             HttpStatusCode.GatewayTimeout, // 504
             HttpStatusCode.Conflict, // 409
         };
+
+        public static TimeSpan HttpTimeout = TimeSpan.FromMinutes(5);
 
         public FileServiceClient(IAccessTokenRepository accessTokenRepository, Uri mdsBaseUrl, HttpMessageHandler httpClientHandler)
         {
@@ -122,52 +125,52 @@
             switch (httpResponse.StatusCode)
             {
                 case HttpStatusCode.OK:
-                {
-                    throw new InvalidOperationException($"The url, {fullUri}, sent back the whole file instead of just the headers.  You may be running an old version of MDS. Please install the latest version of MDS from the Installer.");
-                }
-
-                case HttpStatusCode.NoContent:
-                {
-                    // HEAD returns NoContent on success
-
-                    var headersLastModified = httpResponse.Content.Headers.LastModified;
-                    var headersContentMd5 = httpResponse.Content.Headers.ContentMD5;
-                    var contentDispositionFileName = httpResponse.Content.Headers.ContentDisposition?.FileName;
-
-                    var result = new CheckFileResult
                     {
-                        StatusCode = httpResponse.StatusCode,
-                        LastModified = headersLastModified,
-                        FileNameOnServer = contentDispositionFileName,
-                        FullUri = fullUri
-                    };
-
-                    if (headersContentMd5 != null)
-                    {
-                        result.HashForFileOnServer = Encoding.UTF8.GetString(headersContentMd5);
+                        throw new InvalidOperationException($"The url, {fullUri}, sent back the whole file instead of just the headers.  You may be running an old version of MDS. Please install the latest version of MDS from the Installer.");
                     }
 
-                    return result;
-                }
+                case HttpStatusCode.NoContent:
+                    {
+                        // HEAD returns NoContent on success
+
+                        var headersLastModified = httpResponse.Content.Headers.LastModified;
+                        var headersContentMd5 = httpResponse.Content.Headers.ContentMD5;
+                        var contentDispositionFileName = httpResponse.Content.Headers.ContentDisposition?.FileName;
+
+                        var result = new CheckFileResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            LastModified = headersLastModified,
+                            FileNameOnServer = contentDispositionFileName,
+                            FullUri = fullUri
+                        };
+
+                        if (headersContentMd5 != null)
+                        {
+                            result.HashForFileOnServer = Encoding.UTF8.GetString(headersContentMd5);
+                        }
+
+                        return result;
+                    }
 
                 case HttpStatusCode.NotFound:
-                {
-                    // this is acceptable response if the file does not exist on the server
-                    return new CheckFileResult
                     {
-                        StatusCode = httpResponse.StatusCode,
-                        FullUri = fullUri
-                    };
-                }
+                        // this is acceptable response if the file does not exist on the server
+                        return new CheckFileResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            FullUri = fullUri
+                        };
+                    }
                 default:
-                {
-                    return new CheckFileResult
                     {
-                        StatusCode = httpResponse.StatusCode,
-                        Error = content,
-                        FullUri = fullUri
-                    };
-                }
+                        return new CheckFileResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            Error = content,
+                            FullUri = fullUri
+                        };
+                    }
             }
         }
 
@@ -235,14 +238,14 @@
                         };
                     }
                 default:
-                {
-                    return new CreateSessionResult
                     {
-                        StatusCode = httpResponse.StatusCode,
-                        Error = content,
-                        FullUri = fullUri
-                    };
-                }
+                        return new CreateSessionResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            Error = content,
+                            FullUri = fullUri
+                        };
+                    }
             }
         }
 
@@ -273,42 +276,45 @@
 
             var method = Convert.ToString(HttpMethod.Put);
 
-            using (var requestContent = new MultipartFormDataContent())
+            var policy = GetRetryPolicy(resourceId, method, fullUri);
+
+            await this.SetAuthorizationHeaderInHttpClientAsync(resourceId);
+
+            OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
+
+            var httpResponse = await policy
+                .ExecuteAsync(async () =>
+                {
+                    using (var requestContent = new MultipartFormDataContent())
+                    {
+                        stream.Seek(0, SeekOrigin.Begin);
+
+                        var fileContent = new StreamContent(stream);
+
+                        fileContent.Headers.ContentDisposition = new
+                            ContentDispositionHeaderValue(DispositionType)
+                            {
+                                FileName = fileName
+                            };
+
+                        fileContent.Headers.ContentRange =
+                            new ContentRangeHeaderValue(filePart.Offset, filePart.Offset + filePart.Size - 1,
+                                fullFileSize);
+
+                        fileContent.Headers.ContentType = new MediaTypeHeaderValue(ApplicationOctetStreamMediaType);
+                        fileContent.Headers.ContentMD5 = Encoding.UTF8.GetBytes(filePart.Hash);
+                        requestContent.Add(fileContent);
+
+                        return await _httpClient.PutAsync(fullUri, requestContent);
+                    }
+                });
+
+            var content = await httpResponse.Content.ReadAsStringAsync();
+            OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString(), content));
+
+            switch (httpResponse.StatusCode)
             {
-                stream.Seek(0, SeekOrigin.Begin);
-
-                var fileContent = new StreamContent(stream);
-
-                fileContent.Headers.ContentDisposition = new
-                    ContentDispositionHeaderValue(DispositionType)
-                {
-                    FileName = fileName
-                };
-
-                fileContent.Headers.ContentRange =
-                    new ContentRangeHeaderValue(filePart.Offset, filePart.Offset + filePart.Size - 1, fullFileSize);
-
-                fileContent.Headers.ContentType = new MediaTypeHeaderValue(ApplicationOctetStreamMediaType);
-                fileContent.Headers.ContentMD5 = Encoding.UTF8.GetBytes(filePart.Hash);
-                requestContent.Add(fileContent);
-
-                await this.SetAuthorizationHeaderInHttpClientAsync(resourceId);
-
-                OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
-
-                var policy = GetRetryPolicy(resourceId, method, fullUri);
-
-                var httpResponse = await policy
-                    .ExecuteAsync(() => 
-                        // ReSharper disable once AccessToDisposedClosure
-                        _httpClient.PutAsync(fullUri, requestContent));
-
-                var content = await httpResponse.Content.ReadAsStringAsync();
-                OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString(), content ));
-
-                switch (httpResponse.StatusCode)
-                {
-                    case HttpStatusCode.OK:
+                case HttpStatusCode.OK:
                     {
                         this.numberOfPartsUploaded++;
 
@@ -318,7 +324,7 @@
                             PartsUploaded = this.numberOfPartsUploaded
                         };
                     }
-                    default:
+                default:
                     {
                         return new UploadStreamResult
                         {
@@ -327,8 +333,8 @@
                             FullUri = fullUri
                         };
                     }
-                }
             }
+
         }
 
         /// <inheritdoc />
@@ -376,11 +382,18 @@
             var policy = GetRetryPolicy(resourceId, method, fullUri);
 
             var httpResponse = await policy
-                .ExecuteAsync(() => _httpClient.PostAsync(
-                    fullUri,
-                    new StringContent(JsonConvert.SerializeObject(form),
-                        Encoding.UTF8,
-                        ApplicationJsonMediaType)));
+                .ExecuteAsync(() =>
+                {
+                    var jsonSerializerSettings = new JsonSerializerSettings
+                    {
+                        NullValueHandling = NullValueHandling.Ignore
+                    };
+                    return _httpClient.PostAsync(
+                        fullUri,
+                        new StringContent(JsonConvert.SerializeObject(form, jsonSerializerSettings),
+                            Encoding.UTF8,
+                            ApplicationJsonMediaType));
+                });
 
             var content = await httpResponse.Content.ReadAsStringAsync();
 
@@ -389,42 +402,42 @@
             switch (httpResponse.StatusCode)
             {
                 case HttpStatusCode.OK:
-                {
-                    var clientResponse = JsonConvert.DeserializeObject<UploadSession>(content);
-
-                    var result = new CommitResult
                     {
-                        StatusCode = httpResponse.StatusCode,
-                        FullUri = fullUri,
-                        Session = clientResponse
-                    };
+                        var clientResponse = JsonConvert.DeserializeObject<UploadSession>(content);
 
-                    return result;
-                }
+                        var result = new CommitResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            FullUri = fullUri,
+                            Session = clientResponse
+                        };
+
+                        return result;
+                    }
                 case HttpStatusCode.BadRequest:
-                {
-                    dynamic clientResponse = JsonConvert.DeserializeObject(content);
-                    var errorCode = clientResponse["ErrorCode"] != null
-                        ? Convert.ToString(clientResponse["ErrorCode"])
-                        : null;
+                    {
+                        dynamic clientResponse = JsonConvert.DeserializeObject(content);
+                        var errorCode = clientResponse["ErrorCode"] != null
+                            ? Convert.ToString(clientResponse["ErrorCode"])
+                            : null;
 
-                    return new CommitResult
-                    {
-                        StatusCode = httpResponse.StatusCode,
-                        FullUri = fullUri,
-                        ErrorCode = errorCode,
-                        Error = content
-                    };
-                }
+                        return new CommitResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            FullUri = fullUri,
+                            ErrorCode = errorCode,
+                            Error = content
+                        };
+                    }
                 default:
-                {
-                    return new CommitResult
                     {
-                        StatusCode = httpResponse.StatusCode,
-                        Error = content,
-                        FullUri = fullUri
-                    };
-                }
+                        return new CommitResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            Error = content,
+                            FullUri = fullUri
+                        };
+                    }
             }
         }
 
@@ -464,50 +477,48 @@
             switch (httpResponse.StatusCode)
             {
                 case HttpStatusCode.OK:
-                {
-                    var headersLastModified = httpResponse.Content.Headers.LastModified;
-                    var headersContentMd5 = httpResponse.Content.Headers.ContentMD5;
-                    var contentDispositionFileName = httpResponse.Content.Headers.ContentDisposition?.FileName;
-
-                    var result = new CheckFileResult
                     {
-                        StatusCode = httpResponse.StatusCode,
-                        LastModified = headersLastModified,
-                        FileNameOnServer = contentDispositionFileName,
-                        FullUri = fullUri
-                    };
+                        var headersLastModified = httpResponse.Content.Headers.LastModified;
+                        var headersContentMd5 = httpResponse.Content.Headers.ContentMD5;
+                        var contentDispositionFileName = httpResponse.Content.Headers.ContentDisposition?.FileName;
 
-                    if (headersContentMd5 != null)
-                    {
-                        result.HashForFileOnServer = Encoding.UTF8.GetString(headersContentMd5);
-                    }
-
-                    var contentStream = await httpResponse.Content.ReadAsStreamAsync();
-
-                    var bufferSize = contentStream.Length;
-
-                    if (contentDispositionFileName != null)
-                    {
-                        var fullPath = Path.Combine(utTempPath, contentDispositionFileName);
-                        using (FileStream destinationStream =
-                            new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None,
-                                bufferSize: Convert.ToInt32(bufferSize), useAsync: true))
+                        var result = new CheckFileResult
                         {
-                            await contentStream.CopyToAsync(destinationStream);
-                        }
-                    }
+                            StatusCode = httpResponse.StatusCode,
+                            LastModified = headersLastModified,
+                            FileNameOnServer = contentDispositionFileName,
+                            FullUri = fullUri
+                        };
 
-                    return result;
-                }
+                        if (headersContentMd5 != null)
+                        {
+                            result.HashForFileOnServer = Encoding.UTF8.GetString(headersContentMd5);
+                        }
+
+                        var contentStream = await httpResponse.Content.ReadAsStreamAsync();
+
+                        if (contentDispositionFileName != null)
+                        {
+                            var fullPath = Path.Combine(utTempPath, contentDispositionFileName);
+                            using (FileStream destinationStream =
+                                new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None,
+                                    bufferSize: DefaultBufferSize, useAsync: true))
+                            {
+                                await contentStream.CopyToAsync(destinationStream);
+                            }
+                        }
+
+                        return result;
+                    }
                 case HttpStatusCode.NotFound:
-                {
-                    // this is acceptable response if the file does not exist on the server
-                    return new CheckFileResult
                     {
-                        StatusCode = httpResponse.StatusCode,
-                        FullUri = fullUri
-                    };
-                }
+                        // this is acceptable response if the file does not exist on the server
+                        return new CheckFileResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            FullUri = fullUri
+                        };
+                    }
                 default:
                     {
                         var content = await httpResponse.Content.ReadAsStringAsync();
@@ -551,25 +562,25 @@
             switch (httpResponse.StatusCode)
             {
                 case HttpStatusCode.OK:
-                {
-                    var uploadSession = JsonConvert.DeserializeObject<UploadSession>(content);
+                    {
+                        var uploadSession = JsonConvert.DeserializeObject<UploadSession>(content);
 
-                    return new DeleteSessionResult
-                    {
-                        StatusCode = httpResponse.StatusCode,
-                        FullUri = fullUri,
-                        Session = uploadSession
-                    };
-                }
+                        return new DeleteSessionResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            FullUri = fullUri,
+                            Session = uploadSession
+                        };
+                    }
                 default:
-                {
-                    return new DeleteSessionResult
                     {
-                        StatusCode = httpResponse.StatusCode,
-                        Error = content,
-                        FullUri = fullUri
-                    };
-                }
+                        return new DeleteSessionResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            Error = content,
+                            FullUri = fullUri
+                        };
+                    }
             }
         }
 
@@ -579,8 +590,9 @@
 
         private static HttpClient CreateHttpClient(HttpMessageHandler httpClientHandler)
         {
-            var httpClient = new HttpClient(httpClientHandler);
+            var httpClient = new HttpClient(httpClientHandler, false);
             httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(ApplicationJsonMediaType));
+            httpClient.Timeout = HttpTimeout;
             return httpClient;
         }
 
