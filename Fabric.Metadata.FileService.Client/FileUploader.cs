@@ -2,6 +2,7 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.IO;
     using System.Threading.Tasks;
     using System.Net;
@@ -25,13 +26,13 @@
         public event AccessTokenRequestedEventHandler AccessTokenRequested;
         public event NewAccessTokenRequestedEventHandler NewAccessTokenRequested;
 
-        private int numPartsUploaded;
         private readonly IFileServiceClientFactory fileServiceClientFactory;
         private readonly IAccessTokenRepository accessTokenRepository;
         private readonly Uri mdsBaseUrl;
+        private readonly Stopwatch watch;
 
         public FileUploader(
-            IAccessTokenRepository accessTokenRepository, 
+            IAccessTokenRepository accessTokenRepository,
             Uri mdsBaseUrl)
             : this(new FileServiceClientFactory(), accessTokenRepository, mdsBaseUrl)
         {
@@ -52,12 +53,13 @@
 
             if (!mdsBaseUrl.ToString().EndsWith(@"/"))
             {
-                mdsBaseUrl = new Uri($@"{mdsBaseUrl}/"); 
+                mdsBaseUrl = new Uri($@"{mdsBaseUrl}/");
             }
 
             if (string.IsNullOrWhiteSpace(mdsBaseUrl.ToString())) throw new ArgumentNullException(nameof(mdsBaseUrl));
 
             this.mdsBaseUrl = mdsBaseUrl;
+            this.watch = new Stopwatch();
         }
 
         public async Task UploadFileAsync(int resourceId, string filePath, CancellationToken ctsToken)
@@ -77,36 +79,57 @@
                 throw new InvalidAccessTokenException(accessToken);
             }
 
-            // first check if the server already has the file
-            bool fileAlreadyExists = await CheckIfFileExistsOnServerAsync(resourceId, filePath, hashForFile);
+            using (var fileServiceClient = CreateFileServiceClient())
+            {
+                fileServiceClient.Navigating += RelayNavigatingEvent;
+                fileServiceClient.Navigated += RelayNavigatedEvent;
+                fileServiceClient.TransientError += RelayTransientErrorEvent;
+                fileServiceClient.AccessTokenRequested += RelayAccessTokenRequestedEvent;
+                fileServiceClient.NewAccessTokenRequested += RelayNewAccessTokenRequestedEvent;
 
-            ctsToken.ThrowIfCancellationRequested();
-
-            if (fileAlreadyExists) return;
-
-            // create new upload session
-            var uploadSession = await CreateNewUploadSessionAsync(resourceId);
-            ctsToken.ThrowIfCancellationRequested();
-
-            numPartsUploaded = 0;
-
-            var fullFileSize = new FileInfo(filePath).Length;
-
-            var countOfFileParts = fileSplitter.GetCountOfFileParts(uploadSession.FileUploadChunkSizeInBytes, fullFileSize);
-
-            OnFileUploadStarted(new FileUploadStartedEventArgs(resourceId, uploadSession.SessionId, fileName, countOfFileParts));
-
-            var fileParts = await fileSplitter.SplitFile(filePath, fileName, uploadSession.FileUploadChunkSizeInBytes,
-                uploadSession.FileUploadMaxFileSizeInMegabytes,
-                async (stream, part) =>
+                try
                 {
-                    ctsToken.ThrowIfCancellationRequested();
-                    await this.UploadFilePartStreamAsync(stream, part, resourceId,
-                        uploadSession.SessionId, fileName, fullFileSize, countOfFileParts);
-                });
+                    // first check if the server already has the file
+                    bool fileAlreadyExists = await CheckIfFileExistsOnServerAsync(fileServiceClient, resourceId, filePath, hashForFile);
 
-            await CommitAsync(resourceId, uploadSession.SessionId, fileName, hashForFile,
-                fullFileSize, fileParts);
+                    ctsToken.ThrowIfCancellationRequested();
+
+                    if (fileAlreadyExists) return;
+
+                    // create new upload session
+                    var uploadSession = await CreateNewUploadSessionAsync(fileServiceClient, resourceId);
+                    ctsToken.ThrowIfCancellationRequested();
+
+                    var fullFileSize = new FileInfo(filePath).Length;
+
+                    var countOfFileParts =
+                        fileSplitter.GetCountOfFileParts(uploadSession.FileUploadChunkSizeInBytes, fullFileSize);
+
+                    OnFileUploadStarted(new FileUploadStartedEventArgs(resourceId, uploadSession.SessionId, fileName,
+                        countOfFileParts));
+
+                    this.watch.Restart();
+
+                    var fileParts = await fileSplitter.SplitFile(filePath, fileName,
+                        uploadSession.FileUploadChunkSizeInBytes,
+                        uploadSession.FileUploadMaxFileSizeInMegabytes,
+                        async (stream, part) =>
+                        {
+                            ctsToken.ThrowIfCancellationRequested();
+                            await this.UploadFilePartStreamAsync(fileServiceClient, stream, part, resourceId, uploadSession.SessionId, fileName, fullFileSize, countOfFileParts);
+                        });
+
+                    await CommitAsync(fileServiceClient, resourceId, uploadSession.SessionId, fileName, hashForFile, fullFileSize, fileParts);
+                }
+                finally
+                {
+                    fileServiceClient.Navigating -= RelayNavigatingEvent;
+                    fileServiceClient.Navigated -= RelayNavigatedEvent;
+                    fileServiceClient.TransientError -= RelayTransientErrorEvent;
+                    fileServiceClient.AccessTokenRequested -= RelayAccessTokenRequestedEvent;
+                    fileServiceClient.NewAccessTokenRequested -= RelayNewAccessTokenRequestedEvent;
+                }
+            }
         }
 
         public async Task DownloadFileAsync(int resourceId, string utTempFolder, CancellationToken ctsToken)
@@ -115,9 +138,11 @@
 
             using (var fileServiceClient = CreateFileServiceClient())
             {
-                fileServiceClient.Navigating += OnNavigatingRelay;
-                fileServiceClient.Navigated += OnNavigatedRelay;
-                fileServiceClient.TransientError += OnTransientErrorRelay;
+                fileServiceClient.Navigating += RelayNavigatingEvent;
+                fileServiceClient.Navigated += RelayNavigatedEvent;
+                fileServiceClient.TransientError += RelayTransientErrorEvent;
+                fileServiceClient.AccessTokenRequested += RelayAccessTokenRequestedEvent;
+                fileServiceClient.NewAccessTokenRequested += RelayNewAccessTokenRequestedEvent;
 
                 try
                 {
@@ -134,233 +159,199 @@
                 }
                 finally
                 {
-                    fileServiceClient.Navigating -= OnNavigatingRelay;
-                    fileServiceClient.Navigated -= OnNavigatedRelay;
-                    fileServiceClient.TransientError -= OnTransientErrorRelay;
+                    fileServiceClient.Navigating -= RelayNavigatingEvent;
+                    fileServiceClient.Navigated -= RelayNavigatedEvent;
+                    fileServiceClient.TransientError -= RelayTransientErrorEvent;
+                    fileServiceClient.AccessTokenRequested -= RelayAccessTokenRequestedEvent;
+                    fileServiceClient.NewAccessTokenRequested -= RelayNewAccessTokenRequestedEvent;
                 }
             }
         }
 
-        private async Task<bool> CheckIfFileExistsOnServerAsync(int resourceId, string filePath, string hashForFile)
+        private async Task<bool> CheckIfFileExistsOnServerAsync(IFileServiceClient fileServiceClient, int resourceId,
+            string filePath, string hashForFile)
         {
+            if (fileServiceClient == null)
+            {
+                throw new ArgumentNullException(nameof(fileServiceClient));
+            }
+
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var fileServiceClient = CreateFileServiceClient())
+            var result = await fileServiceClient.CheckFileAsync(resourceId);
+
+            switch (result.StatusCode)
             {
-                fileServiceClient.Navigating += OnNavigatingRelay;
-                fileServiceClient.Navigated += OnNavigatedRelay;
-                fileServiceClient.TransientError += OnTransientErrorRelay;
-
-                try
-                {
-                    var result = await fileServiceClient.CheckFileAsync(resourceId);
-
-                    switch (result.StatusCode)
+                case HttpStatusCode.NoContent:
                     {
-                        case HttpStatusCode.NoContent:
+                        if (result.HashForFileOnServer != null)
+                        {
+                            OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile,
+                                result.HashForFileOnServer, result.LastModified,
+                                result.FileNameOnServer, hashForFile == result.HashForFileOnServer));
+
+                            if (hashForFile == result.HashForFileOnServer
+                                && Path.GetFileName(filePath) == Path.GetFileName(result.FileNameOnServer))
                             {
-                                if (result.HashForFileOnServer != null)
-                                {
-                                    OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile,
-                                        result.HashForFileOnServer, result.LastModified,
-                                        result.FileNameOnServer, hashForFile == result.HashForFileOnServer));
-
-                                    if (hashForFile == result.HashForFileOnServer
-                                        && Path.GetFileName(filePath) == Path.GetFileName(result.FileNameOnServer))
-                                    {
-                                        return true;
-                                    }
-                                }
-
-                                break;
+                                return true;
                             }
-                        case HttpStatusCode.NotFound:
-                            // this is acceptable response if the file does not exist on the server
-                            break;
+                        }
 
-                        default:
-                            OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
-                            throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
+                        break;
                     }
-                }
-                finally
-                {
-                    fileServiceClient.Navigating -= OnNavigatingRelay;
-                    fileServiceClient.Navigated -= OnNavigatedRelay;
-                    fileServiceClient.TransientError -= OnTransientErrorRelay;
-                }
+                case HttpStatusCode.NotFound:
+                    // this is acceptable response if the file does not exist on the server
+                    break;
+
+                default:
+                    OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(),
+                        result.Error));
+                    throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
             }
 
             return false;
         }
 
-        private async Task<UploadSession> CreateNewUploadSessionAsync(int resourceId)
+        private async Task<UploadSession> CreateNewUploadSessionAsync(IFileServiceClient fileServiceClient,
+            int resourceId)
         {
+            if (fileServiceClient == null)
+            {
+                throw new ArgumentNullException(nameof(fileServiceClient));
+            }
+
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var fileServiceClient = CreateFileServiceClient())
+            var result = await fileServiceClient.CreateNewUploadSessionAsync(resourceId);
+
+            switch (result.StatusCode)
             {
-                fileServiceClient.Navigating += OnNavigatingRelay;
-                fileServiceClient.Navigated += OnNavigatedRelay;
-                fileServiceClient.TransientError += OnTransientErrorRelay;
+                case HttpStatusCode.OK:
+                    OnSessionCreated(new SessionCreatedEventArgs(
+                        resourceId, result.Session.SessionId, result.Session.FileUploadChunkSizeInBytes,
+                        result.Session.FileUploadMaxFileSizeInMegabytes,
+                        result.Session.SessionStartedBy, result.Session.SessionStartedDateTimeUtc,
+                        result.Session.FileUploadSessionExpirationInMinutes));
 
-                try
-                {
-                    var result = await fileServiceClient.CreateNewUploadSessionAsync(resourceId);
+                    return result.Session;
 
-                    switch (result.StatusCode)
-                    {
-                        case HttpStatusCode.OK:
-                            OnSessionCreated(new SessionCreatedEventArgs(
-                                resourceId, result.Session.SessionId, result.Session.FileUploadChunkSizeInBytes,
-                                result.Session.FileUploadMaxFileSizeInMegabytes,
-                                result.Session.SessionStartedBy, result.Session.SessionStartedDateTimeUtc,
-                                result.Session.FileUploadSessionExpirationInMinutes));
-
-                            return result.Session;
-
-                        default:
-                            OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
-                            throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
-                    }
-                }
-                finally
-                {
-                    fileServiceClient.Navigating -= OnNavigatingRelay;
-                    fileServiceClient.Navigated -= OnNavigatedRelay;
-                    fileServiceClient.TransientError -= OnTransientErrorRelay;
-                }
+                default:
+                    OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(),
+                        result.Error));
+                    throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
             }
         }
 
         // ReSharper disable once UnusedMember.Local
-        private async Task<UploadSession> DeleteUploadSessionAsync(int resourceId)
+        private async Task<UploadSession> DeleteUploadSessionAsync(IFileServiceClient fileServiceClient, int resourceId)
         {
+            if (fileServiceClient == null)
+            {
+                throw new ArgumentNullException(nameof(fileServiceClient));
+            }
+
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var fileServiceClient = CreateFileServiceClient())
+            var result = await fileServiceClient.DeleteUploadSessionAsync(resourceId);
+
+            switch (result.StatusCode)
             {
-                fileServiceClient.Navigating += OnNavigatingRelay;
-                fileServiceClient.Navigated += OnNavigatedRelay;
-                fileServiceClient.TransientError += OnTransientErrorRelay;
+                case HttpStatusCode.OK:
+                    return result.Session;
 
-                try
-                {
-                    var result = await fileServiceClient.DeleteUploadSessionAsync(resourceId);
-
-                    switch (result.StatusCode)
-                    {
-                        case HttpStatusCode.OK:
-                            return result.Session;
-                        default:
-                            OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
-                            throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
-                    }
-                }
-                finally
-                {
-                    fileServiceClient.Navigating -= OnNavigatingRelay;
-                    fileServiceClient.Navigated -= OnNavigatedRelay;
-                    fileServiceClient.TransientError -= OnTransientErrorRelay;
-                }
+                default:
+                    OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(),
+                        result.Error));
+                    throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
             }
         }
 
-
         private async Task UploadFilePartStreamAsync(
-            Stream stream, 
+            IFileServiceClient fileServiceClient, 
+            Stream stream,
             FilePart filePart,
             int resourceId,
-            Guid sessionId, 
-            string fileName, 
-            long fullFileSize, 
+            Guid sessionId,
+            string fileName,
+            long fullFileSize,
             int filePartsCount)
         {
+            if (fileServiceClient == null)
+            {
+                throw new ArgumentNullException(nameof(fileServiceClient));
+            }
+
             if (filePart == null) throw new ArgumentNullException(nameof(filePart));
             if (fileName == null) throw new ArgumentNullException(nameof(fileName));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
             if (fullFileSize <= 0) throw new ArgumentOutOfRangeException(nameof(fullFileSize));
             if (filePartsCount <= 0) throw new ArgumentOutOfRangeException(nameof(filePartsCount));
             if (sessionId == default(Guid)) throw new ArgumentOutOfRangeException(nameof(sessionId));
-            
-            using (var fileServiceClient = CreateFileServiceClient())
+
+
+            var result = await fileServiceClient.UploadStreamAsync(resourceId, sessionId, stream, filePart, fileName, fullFileSize, filePartsCount);
+
+            switch (result.StatusCode)
             {
-                fileServiceClient.Navigating += OnNavigatingRelay;
-                fileServiceClient.Navigated += OnNavigatedRelay;
-                fileServiceClient.TransientError += OnTransientErrorRelay;
+                case HttpStatusCode.OK:
+                    TimeSpan timeElapsed = this.watch.Elapsed;
+                    var ticksPerPart = timeElapsed.Ticks / result.PartsUploaded;
+                    var estimatedTotalTicksLeft = ticksPerPart * (filePartsCount - result.PartsUploaded);
 
-                try
-                {
-                    var result = await fileServiceClient.UploadStreamAsync(resourceId, sessionId, stream, filePart, fileName, fullFileSize, filePartsCount, numPartsUploaded);
+                    var estimatedTimeRemaining = new TimeSpan(estimatedTotalTicksLeft);
 
-                    switch (result.StatusCode)
-                    {
-                        case HttpStatusCode.OK:
-                            OnPartUploaded(
-                                new PartUploadedEventArgs(resourceId, sessionId, fileName, filePart, result.StatusCode.ToString(), filePartsCount, result.PartsUploaded));
+                    OnPartUploaded(
+                        new PartUploadedEventArgs(resourceId, sessionId, fileName, filePart, result.StatusCode.ToString(), filePartsCount, result.PartsUploaded, estimatedTimeRemaining));
 
-                            numPartsUploaded++;
-                            break;
+                    break;
 
-                        default:
-                            OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
-                            throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
-                    }
-                }
-                finally
-                {
-                    fileServiceClient.Navigating -= OnNavigatingRelay;
-                    fileServiceClient.Navigated -= OnNavigatedRelay;
-                    fileServiceClient.TransientError -= OnTransientErrorRelay;
-                }
+                default:
+                    OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
+                    throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
             }
+
         }
 
-        private async Task CommitAsync(int resourceId, Guid sessionId,
-            string filename, string fileHash, long fileSize, IList<FilePart> utFileParts)
+        private async Task CommitAsync(
+            IFileServiceClient fileServiceClient, 
+            int resourceId, 
+            Guid sessionId,
+            string filename, 
+            string fileHash, 
+            long fileSize, 
+            IList<FilePart> utFileParts)
         {
             if (filename == null) throw new ArgumentNullException(nameof(filename));
             if (fileHash == null) throw new ArgumentNullException(nameof(fileHash));
             if (utFileParts == null) throw new ArgumentNullException(nameof(utFileParts));
+            if (fileServiceClient == null)
+            {
+                throw new ArgumentNullException(nameof(fileServiceClient));
+            }
+
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
             if (fileSize <= 0) throw new ArgumentOutOfRangeException(nameof(fileSize));
             if (sessionId == default(Guid)) throw new ArgumentOutOfRangeException(nameof(sessionId));
 
 
-            using (var fileServiceClient = CreateFileServiceClient())
+            var result = await fileServiceClient.CommitAsync(resourceId, sessionId, filename, fileHash, fileSize, utFileParts);
+
+            switch (result.StatusCode)
             {
-                fileServiceClient.Navigating += OnNavigatingRelay;
-                fileServiceClient.Navigated += OnNavigatedRelay;
-                fileServiceClient.TransientError += OnTransientErrorRelay;
+                case HttpStatusCode.OK:
+                    OnFileUploadCompleted(new FileUploadCompletedEventArgs(
+                        resourceId,
+                        sessionId,
+                        filename,
+                        result.Session.FileHash,
+                        result.Session.SessionStartedDateTimeUtc,
+                        result.Session.SessionFinishedDateTimeUtc,
+                        result.Session.SessionStartedBy));
+                    break;
 
-                try
-                {
-                    var result = await fileServiceClient.CommitAsync(resourceId, sessionId, filename, fileHash, fileSize, utFileParts);
-
-                    switch (result.StatusCode)
-                    {
-                        case HttpStatusCode.OK:
-                            OnFileUploadCompleted(new FileUploadCompletedEventArgs(
-                                resourceId, 
-                                sessionId, 
-                                filename, 
-                                result.Session.FileHash,
-                                result.Session.SessionStartedDateTimeUtc, 
-                                result.Session.SessionFinishedDateTimeUtc,
-                                result.Session.SessionStartedBy));
-                            break;
-
-                        default:
-                            OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
-                            throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
-                    }
-                }
-                finally
-                {
-                    fileServiceClient.Navigating -= OnNavigatingRelay;
-                    fileServiceClient.Navigated -= OnNavigatedRelay;
-                    fileServiceClient.TransientError -= OnTransientErrorRelay;
-                }
+                default:
+                    OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
+                    throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
             }
         }
 
@@ -368,28 +359,28 @@
         {
         }
 
-        private void OnNavigatedRelay(object sender, NavigatedEventArgs e)
+        private void RelayNavigatedEvent(object sender, NavigatedEventArgs e)
         {
             OnNavigated(e);
         }
 
-        private void OnNavigatingRelay(object sender, NavigatingEventArgs e)
+        private void RelayNavigatingEvent(object sender, NavigatingEventArgs e)
         {
             OnNavigating(e);
         }
 
-        private void OnTransientErrorRelay(object sender, TransientErrorEventArgs e)
+        private void RelayTransientErrorEvent(object sender, TransientErrorEventArgs e)
         {
             OnTransientError(e);
         }
 
-        private void OnAccessTokenRequestedRelay(object sender, AccessTokenRequestedEventArgs e)
+        private void RelayAccessTokenRequestedEvent(object sender, AccessTokenRequestedEventArgs e)
         {
             OnAccessTokenRequested(e);
         }
 
 
-        private void OnNewAccessTokenRequestedRelay(object sender, NewAccessTokenRequestedEventArgs e)
+        private void RelayNewAccessTokenRequestedEvent(object sender, NewAccessTokenRequestedEventArgs e)
         {
             OnNewAccessTokenRequested(e);
         }

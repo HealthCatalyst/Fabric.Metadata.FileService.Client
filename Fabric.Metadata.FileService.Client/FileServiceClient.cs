@@ -15,6 +15,7 @@
     using Exceptions;
     using Interfaces;
     using Polly;
+    using Polly.Retry;
     using Structures;
 
     /// <inheritdoc />
@@ -39,6 +40,17 @@
         private static HttpClient _httpClient;
         private readonly IAccessTokenRepository accessTokenRepository;
         private readonly Uri mdsBaseUrl;
+        private int numberOfPartsUploaded;
+
+        private readonly HttpStatusCode[] httpStatusCodesWorthRetrying = {
+            HttpStatusCode.Unauthorized, // 401
+            HttpStatusCode.RequestTimeout, // 408
+            HttpStatusCode.InternalServerError, // 500
+            HttpStatusCode.BadGateway, // 502
+            HttpStatusCode.ServiceUnavailable, // 503
+            HttpStatusCode.GatewayTimeout, // 504
+            HttpStatusCode.Conflict, // 409
+        };
 
         public FileServiceClient(IAccessTokenRepository accessTokenRepository, Uri mdsBaseUrl, HttpMessageHandler httpClientHandler)
         {
@@ -94,22 +106,9 @@
 
             OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
-            var httpResponse = await Policy
-                .HandleResult<HttpResponseMessage>(message =>
-                    message.StatusCode != HttpStatusCode.NoContent 
-                    && message.StatusCode != HttpStatusCode.NotFound
-                    && message.StatusCode != HttpStatusCode.OK)
-                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
-                    async (result, timeSpan, retryCount, context) =>
-                    {
-                        if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
-                        {
-                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(resourceId);
-                        }
+            var policy = GetRetryPolicy(resourceId, method, fullUri);
 
-                        var errorContent = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, result.Result.StatusCode.ToString(), errorContent));
-                    })
+            var httpResponse = await policy
                 .ExecuteAsync(() =>
                 {
                     var httpRequestMessage = new HttpRequestMessage(HttpMethod.Get, fullUri);
@@ -124,7 +123,7 @@
             {
                 case HttpStatusCode.OK:
                 {
-                    throw new InvalidOperationException($"The url, {fullUri}, sent back the whole file instead of just the headers");
+                    throw new InvalidOperationException($"The url, {fullUri}, sent back the whole file instead of just the headers.  You may be running an old version of MDS. Please install the latest version of MDS from the Installer.");
                 }
 
                 case HttpStatusCode.NoContent:
@@ -195,20 +194,9 @@
 
             };
 
-            var httpResponse = await Policy
-                .HandleResult<HttpResponseMessage>(message =>
-                    message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
-                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
-                    async (result, timeSpan, retryCount, context) =>
-                    {
-                        if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
-                        {
-                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(resourceId);
-                        }
+            var policy = GetRetryPolicy(resourceId, method, fullUri);
 
-                        var errorContent = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, result.Result.StatusCode.ToString(), errorContent));
-                    })
+            var httpResponse = await policy
                 .ExecuteAsync(() => _httpClient.PostAsync(
                     fullUri,
                     new StringContent(JsonConvert.SerializeObject(form),
@@ -269,7 +257,6 @@
         /// <param name="fileName"></param>
         /// <param name="fullFileSize"></param>
         /// <param name="filePartsCount"></param>
-        /// <param name="numPartsUploaded"></param>
         /// <returns></returns>
         public async Task<UploadStreamResult> UploadStreamAsync(int resourceId,
             Guid sessionId,
@@ -277,11 +264,9 @@
             FilePart filePart,
             string fileName,
             long fullFileSize,
-            int filePartsCount,
-            int numPartsUploaded)
+            int filePartsCount)
         {
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
-            if (numPartsUploaded < 0) throw new ArgumentOutOfRangeException(nameof(numPartsUploaded));
             if (filePartsCount < 0) throw new ArgumentOutOfRangeException(nameof(filePartsCount));
 
             var fullUri = new Uri(this.mdsBaseUrl, $"Files({resourceId})/UploadSessions({sessionId})");
@@ -300,6 +285,10 @@
                     FileName = fileName
                 };
 
+                // we should really be passing the total length also but Asp.net hsa problems parsing it
+                //fileContent.Headers.ContentRange =
+                //    new ContentRangeHeaderValue(filePart.Offset, filePart.Offset + filePart.Size, fullFileSize);
+
                 fileContent.Headers.ContentRange =
                     new ContentRangeHeaderValue(filePart.Offset, filePart.Offset + filePart.Size);
 
@@ -311,21 +300,12 @@
 
                 OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
-                var httpResponse = await Policy
-                    .HandleResult<HttpResponseMessage>(message =>
-                        message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
-                    .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
-                        async (result, timeSpan, retryCount, context) =>
-                        {
-                            if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
-                            {
-                                await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(resourceId);
-                            }
-                            var errorContent = await result.Result.Content.ReadAsStringAsync();
-                            OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, result.Result.StatusCode.ToString(), errorContent));
-                        })
-                    // ReSharper disable once AccessToDisposedClosure
-                    .ExecuteAsync(() => _httpClient.PutAsync(fullUri, requestContent));
+                var policy = GetRetryPolicy(resourceId, method, fullUri);
+
+                var httpResponse = await policy
+                    .ExecuteAsync(() => 
+                        // ReSharper disable once AccessToDisposedClosure
+                        _httpClient.PutAsync(fullUri, requestContent));
 
                 var content = await httpResponse.Content.ReadAsStringAsync();
                 OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString(), content ));
@@ -334,11 +314,12 @@
                 {
                     case HttpStatusCode.OK:
                     {
+                        this.numberOfPartsUploaded++;
+
                         return new UploadStreamResult
                         {
                             StatusCode = httpResponse.StatusCode,
-                            // ReSharper disable once RedundantAssignment
-                            PartsUploaded = numPartsUploaded++
+                            PartsUploaded = this.numberOfPartsUploaded
                         };
                     }
                     default:
@@ -396,20 +377,9 @@
                 }
             };
 
-            var httpResponse = await Policy
-                .HandleResult<HttpResponseMessage>(message =>
-                    message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
-                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
-                    async (result, timeSpan, retryCount, context) =>
-                    {
-                        if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
-                        {
-                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(resourceId);
-                        }
+            var policy = GetRetryPolicy(resourceId, method, fullUri);
 
-                        var errorContent = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, result.Result.StatusCode.ToString(), errorContent));
-                    })
+            var httpResponse = await policy
                 .ExecuteAsync(() => _httpClient.PostAsync(
                     fullUri,
                     new StringContent(JsonConvert.SerializeObject(form),
@@ -481,20 +451,9 @@
 
             OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
-            var httpResponse = await Policy
-                .HandleResult<HttpResponseMessage>(message =>
-                    message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
-                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
-                    async (result, timeSpan, retryCount, context) =>
-                    {
-                        if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
-                        {
-                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(resourceId);
-                        }
+            var policy = GetRetryPolicy(resourceId, method, fullUri);
 
-                        var errorContent = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, result.Result.StatusCode.ToString(), errorContent));
-                    })
+            var httpResponse = await policy
                 .ExecuteAsync(() =>
                 {
                     var httpRequestMessage = new HttpRequestMessage(HttpMethod.Get, fullUri);
@@ -584,20 +543,9 @@
 
             OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
 
-            var httpResponse = await Policy
-                .HandleResult<HttpResponseMessage>(message =>
-                    message.StatusCode != HttpStatusCode.OK && message.StatusCode != HttpStatusCode.BadRequest)
-                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
-                    async (result, timeSpan, retryCount, context) =>
-                    {
-                        if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
-                        {
-                            await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(resourceId);
-                        }
+            var policy = GetRetryPolicy(resourceId, method, fullUri);
 
-                        var errorContent = await result.Result.Content.ReadAsStringAsync();
-                        OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, result.Result.StatusCode.ToString(), errorContent));
-                    })
+            var httpResponse = await policy
                 .ExecuteAsync(() => _httpClient.DeleteAsync(fullUri));
 
             var content = await httpResponse.Content.ReadAsStringAsync();
@@ -665,6 +613,33 @@
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         }
 
+        private RetryPolicy<HttpResponseMessage> GetRetryPolicy(int resourceId, string method, Uri fullUri)
+        {
+            return Policy
+                .Handle<HttpRequestException>()
+                .Or<TaskCanceledException>()
+                .OrResult<HttpResponseMessage>(message => httpStatusCodesWorthRetrying.Contains(message.StatusCode))
+                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
+                    async (result, timeSpan, retryCount, context) =>
+                    {
+                        if (result.Result != null)
+                        {
+                            if (result.Result.StatusCode == HttpStatusCode.Unauthorized)
+                            {
+                                await this.SetAuthorizationHeaderInHttpClientWithNewBearerTokenAsync(resourceId);
+                            }
+
+                            var errorContent = await result.Result.Content.ReadAsStringAsync();
+                            OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri,
+                                result.Result.StatusCode.ToString(), errorContent, retryCount, MaxRetryCount));
+                        }
+                        else
+                        {
+                            OnTransientError(new TransientErrorEventArgs(resourceId, method, fullUri, "Exception",
+                                result.Exception?.ToString(), retryCount, MaxRetryCount));
+                        }
+                    });
+        }
         private void OnNavigating(NavigatingEventArgs e)
         {
             Navigating?.Invoke(this, e);

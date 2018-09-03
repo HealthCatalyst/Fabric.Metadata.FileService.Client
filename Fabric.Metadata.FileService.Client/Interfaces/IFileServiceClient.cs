@@ -40,7 +40,6 @@
         /// <param name="fileName"></param>
         /// <param name="fullFileSize"></param>
         /// <param name="filePartsCount"></param>
-        /// <param name="numPartsUploaded"></param>
         /// <returns></returns>
         Task<UploadStreamResult> UploadStreamAsync(int resourceId,
             Guid sessionId,
@@ -48,8 +47,7 @@
             FilePart filePart,
             string fileName,
             long fullFileSize,
-            int filePartsCount,
-            int numPartsUploaded);
+            int filePartsCount);
 
         /// <summary>
         /// This calls POST Files({resourceId})/UploadSessions({sessionId})/MetadataService.Commit

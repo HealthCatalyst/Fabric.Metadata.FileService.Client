@@ -10,12 +10,12 @@
         /// <summary>
         /// Gets or sets Offset
         /// </summary>
-        public int Offset { get; set; }
+        public long Offset { get; set; }
 
         /// <summary>
         /// Gets or sets Size
         /// </summary>
-        public int Size { get; set; }
+        public long Size { get; set; }
 
         /// <summary>
         /// Gets or sets Hash

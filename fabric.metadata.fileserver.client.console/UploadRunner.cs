@@ -47,12 +47,11 @@
 
             Console.WriteLine($"Enter url to MDS v2 [ENTER for {Properties.Settings.Default.MdsV2Url}]");
             var uriString = Console.ReadLine();
-            Uri mdsv2Url = new Uri(uriString);
-            if (string.IsNullOrWhiteSpace(mdsv2Url.ToString())) mdsv2Url = new Uri(Properties.Settings.Default.MdsV2Url);
+            var mdsV2Url = string.IsNullOrWhiteSpace(uriString) ? new Uri(Properties.Settings.Default.MdsV2Url) : new Uri(uriString);
 
-            Properties.Settings.Default.MdsV2Url = mdsv2Url.ToString();
+            Properties.Settings.Default.MdsV2Url = mdsV2Url.ToString();
 
-            var fileUploader = new FileUploader(new AccessTokenRepository(accessToken), mdsv2Url);
+            var fileUploader = new FileUploader(new AccessTokenRepository(accessToken), mdsV2Url);
             fileUploader.Navigating += FileUploader_Navigating;
             fileUploader.Navigated += FileUploader_Navigated;
             fileUploader.PartUploaded += FileUploader_PartUploaded;
@@ -61,12 +60,15 @@
             fileUploader.UploadError += FileUploader_UploadError;
             fileUploader.SessionCreated += FileUploader_SessionCreated;
             fileUploader.FileChecked += FileUploader_FileChecked;
+            fileUploader.TransientError += FileUploader_TransientError;
+            fileUploader.AccessTokenRequested += FileUploader_AccessTokenRequested;
+            fileUploader.NewAccessTokenRequested += FileUploader_NewAccessTokenRequested;
 
             Properties.Settings.Default.Save();
 
             using (CancellationTokenSource cts = new CancellationTokenSource())
             {
-                var utTempFolder = Path.GetTempPath();
+                // var utTempFolder = Path.GetTempPath();
                 try
                 {
                     await fileUploader.UploadFileAsync(resourceId, filePath, cts.Token);
@@ -106,7 +108,7 @@
 
         private void FileUploader_FileUploadCompleted(object sender, Fabric.Metadata.FileService.Client.Events.FileUploadCompletedEventArgs e)
         {
-            Console.WriteLine($"File Upload Completed: {e.FileName}");
+            Console.WriteLine($"File Upload Completed: {e.FileName}, File Hash: {e.FileHash}, Session Finished: {e.SessionFinishedDateTimeUtc}");
         }
         private void FileUploader_FileUploadStarted(object sender, Fabric.Metadata.FileService.Client.Events.FileUploadStartedEventArgs e)
         {
@@ -115,7 +117,8 @@
 
         private void FileUploader_PartUploaded(object sender, Fabric.Metadata.FileService.Client.Events.PartUploadedEventArgs e)
         {
-            Console.WriteLine($"Part Uploaded: {e.FileName} ({e.NumPartsUploaded}/{e.TotalFileParts}) {e.StatusCode}");
+            var estimatedTimeRemaining = e.EstimatedTimeRemaining.ToString(@"hh\:mm\:ss\.f");
+            Console.WriteLine($"Part Uploaded: {e.FileName} ({e.NumPartsUploaded}/{e.TotalFileParts}) {e.StatusCode}.  Est: {estimatedTimeRemaining}");
         }
 
         private void FileUploader_Navigated(object sender, Fabric.Metadata.FileService.Client.Events.NavigatedEventArgs e)
@@ -126,6 +129,21 @@
         private void FileUploader_Navigating(object sender, Fabric.Metadata.FileService.Client.Events.NavigatingEventArgs e)
         {
             Console.WriteLine($"{e.Method} {e.FullUri}");
+        }
+
+        private void FileUploader_TransientError(object sender, Fabric.Metadata.FileService.Client.Events.TransientErrorEventArgs e)
+        {
+            Console.WriteLine($"Transient Error {e.Method} {e.FullUri} {e.StatusCode} {e.Response}.  Retry count {e.RetryCount}/{e.MaxRetryCount}.");
+        }
+
+        private void FileUploader_NewAccessTokenRequested(object sender, Fabric.Metadata.FileService.Client.Events.NewAccessTokenRequestedEventArgs e)
+        {
+            Console.WriteLine($"New Access token requested for resource: {e.ResourceId}");
+        }
+
+        private void FileUploader_AccessTokenRequested(object sender, Fabric.Metadata.FileService.Client.Events.AccessTokenRequestedEventArgs e)
+        {
+            // Console.WriteLine($"An Access token requested for resource: {e.ResourceId}");
         }
 
         private static string NewReadLine()

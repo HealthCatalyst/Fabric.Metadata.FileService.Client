@@ -92,8 +92,7 @@
 
             mockFileService.Setup(
                     service => service.UploadStreamAsync(resourceId, sessionId,
-                        It.IsAny<Stream>(), It.IsAny<FilePart>(), fileName, fullFileSize, countOfFileParts,
-                        It.IsAny<int>()))
+                        It.IsAny<Stream>(), It.IsAny<FilePart>(), fileName, fullFileSize, countOfFileParts))
                 .ReturnsAsync(uploadStreamResult);
 
             var commitResult = new CommitResult
@@ -124,8 +123,7 @@
 
             mockFileService.Verify(
                 service => service.UploadStreamAsync(resourceId, sessionId,
-                    It.IsAny<Stream>(), It.IsAny<FilePart>(), fileName, fullFileSize, countOfFileParts,
-                    It.IsAny<int>()),
+                    It.IsAny<Stream>(), It.IsAny<FilePart>(), fileName, fullFileSize, countOfFileParts),
                 Times.Exactly(countOfFileParts));
 
             mockFileService.Verify(
@@ -185,8 +183,7 @@
 
             mockFileService.Setup(
                     service => service.UploadStreamAsync(resourceId, sessionId,
-                        It.IsAny<Stream>(), It.IsAny<FilePart>(), fileName, fullFileSize, countOfFileParts,
-                        It.IsAny<int>()))
+                        It.IsAny<Stream>(), It.IsAny<FilePart>(), fileName, fullFileSize, countOfFileParts))
                 .ReturnsAsync(uploadStreamResult);
 
             var commitResult = new CommitResult
@@ -267,8 +264,7 @@
 
             mockFileService.Setup(
                     service => service.UploadStreamAsync(resourceId, sessionId,
-                        It.IsAny<Stream>(), It.IsAny<FilePart>(), fileName, fullFileSize, countOfFileParts,
-                        It.IsAny<int>()))
+                        It.IsAny<Stream>(), It.IsAny<FilePart>(), fileName, fullFileSize, countOfFileParts))
                 .ReturnsAsync(uploadStreamResult);
 
             var commitResult = new CommitResult
@@ -299,8 +295,7 @@
 
             mockFileService.Verify(
                 service => service.UploadStreamAsync(resourceId, sessionId,
-                    It.IsAny<Stream>(), It.IsAny<FilePart>(), fileName, fullFileSize, countOfFileParts,
-                    It.IsAny<int>()),
+                    It.IsAny<Stream>(), It.IsAny<FilePart>(), fileName, fullFileSize, countOfFileParts),
                 Times.Exactly(countOfFileParts));
 
             mockFileService.Verify(

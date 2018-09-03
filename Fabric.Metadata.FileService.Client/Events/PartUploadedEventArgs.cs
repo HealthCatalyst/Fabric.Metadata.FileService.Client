@@ -6,17 +6,24 @@
 
     public class PartUploadedEventArgs : CancelEventArgs
     {
-        public PartUploadedEventArgs(int resourceId, Guid sessionId, string fileName, FilePart filePart,
-            string statusCode, int totalFileParts,
-            int numPartsUploaded)
+        public PartUploadedEventArgs(
+            int resourceId, 
+            Guid sessionId, 
+            string fileName, 
+            FilePart filePart,
+            string statusCode, 
+            int totalFileParts,
+            int numPartsUploaded, 
+            TimeSpan estimatedTimeRemaining)
         {
             this.FileName = fileName;
             this.FilePart = filePart;
             this.StatusCode = statusCode;
             this.TotalFileParts = totalFileParts;
             this.NumPartsUploaded = numPartsUploaded;
-            SessionId = sessionId;
-            ResourceId = resourceId;
+            this.EstimatedTimeRemaining = estimatedTimeRemaining;
+            this.SessionId = sessionId;
+            this.ResourceId = resourceId;
         }
 
         public string FileName { get; }
@@ -28,6 +35,7 @@
         public FilePart FilePart { get; }
 
         public int NumPartsUploaded { get; }
+        public TimeSpan EstimatedTimeRemaining { get; }
         public Guid SessionId { get; }
         public int ResourceId { get; }
     }
