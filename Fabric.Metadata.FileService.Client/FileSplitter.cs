@@ -25,7 +25,7 @@ namespace Fabric.Metadata.FileService.Client
             var maxFileSizeInBytes = (maxFileSizeInMegabytes * 1024 * 1024);
             if (fileSize > maxFileSizeInBytes)
             {
-                throw new Exception($"File {filePath} is too big {fileSize} bytes while server allows {maxFileSizeInBytes}");
+                throw new InvalidOperationException($"File {filePath} is too big {fileSize} bytes while server allows {maxFileSizeInBytes}");
             }
 
             var md5FileHasher = new MD5FileHasher();

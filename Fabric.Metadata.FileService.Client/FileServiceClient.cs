@@ -287,9 +287,14 @@
                 {
                     using (var requestContent = new MultipartFormDataContent())
                     {
+                        // StreamContent disposes the stream when it is done so we need to keep a copy for retries
+                        var memoryStream = new MemoryStream();
+                        // ReSharper disable once AccessToDisposedClosure
                         stream.Seek(0, SeekOrigin.Begin);
+                        // ReSharper disable once AccessToDisposedClosure
+                        await stream.CopyToAsync(memoryStream);
 
-                        var fileContent = new StreamContent(stream);
+                        var fileContent = new StreamContent(memoryStream);
 
                         fileContent.Headers.ContentDisposition = new
                             ContentDispositionHeaderValue(DispositionType)
