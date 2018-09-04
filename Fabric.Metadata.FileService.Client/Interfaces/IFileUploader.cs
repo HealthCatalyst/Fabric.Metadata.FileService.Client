@@ -19,10 +19,11 @@
         event AccessTokenRequestedEventHandler AccessTokenRequested;
         event NewAccessTokenRequestedEventHandler NewAccessTokenRequested;
         event CalculatingHashEventHandler CalculatingHash;
+        event CommittingEventHandler Committing;
+        event CheckingCommitEventHandler CheckingCommit;
 
         Task UploadFileAsync(int resourceId, string filePath, CancellationToken ctsToken);
         Task DownloadFileAsync(int resourceId, string utTempFolder, CancellationToken ctsToken);
 
-        event CommittingEventHandler Committing;
     }
 }

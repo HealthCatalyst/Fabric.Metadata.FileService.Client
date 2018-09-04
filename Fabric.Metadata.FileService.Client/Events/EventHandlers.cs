@@ -13,4 +13,5 @@
     public delegate void AccessTokenRequestedEventHandler(object sender, AccessTokenRequestedEventArgs e);
     public delegate void NewAccessTokenRequestedEventHandler(object sender, NewAccessTokenRequestedEventArgs e);
     public delegate void CommittingEventHandler(object sender, CommittingEventArgs e);
+    public delegate void CheckingCommitEventHandler(object sender, CheckingCommitEventArgs e);
 }

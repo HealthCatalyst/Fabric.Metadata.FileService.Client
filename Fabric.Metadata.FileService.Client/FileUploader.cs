@@ -24,6 +24,7 @@
         public event PartUploadedEventHandler PartUploaded;
         public event FileUploadCompletedEventHandler FileUploadCompleted;
         public event CommittingEventHandler Committing;
+        public event CheckingCommitEventHandler CheckingCommit;
 
         public event UploadErrorEventHandler UploadError;
         public event TransientErrorEventHandler TransientError;
@@ -123,6 +124,7 @@
                         async (stream, part) =>
                         {
                             ctsToken.ThrowIfCancellationRequested();
+                            // ReSharper disable once AccessToDisposedClosure
                             await this.UploadFilePartStreamAsync(fileServiceClient, stream, part, resourceId, uploadSession.SessionId, fileName, fullFileSize, countOfFileParts);
                         });
 
@@ -132,12 +134,13 @@
 
                     if (commitResult.StatusCode == HttpStatusCode.Accepted)
                     {
-                        for (int i = 0; i < NumberOfTimesToCallCheckCommit; i++)
+                        for (int timesCalled = 0; timesCalled < NumberOfTimesToCallCheckCommit; timesCalled++)
                         {
+                            OnCheckCommit(resourceId, uploadSession, timesCalled);
                             commitResult = await CheckCommitAsync(fileServiceClient, resourceId,
                                 uploadSession.SessionId, fileName);
                             if (commitResult.StatusCode != HttpStatusCode.Accepted) break;
-                            Thread.Sleep(SecondsToSleepBetweenCallingCheckCommit);
+                            await Task.Delay(SecondsToSleepBetweenCallingCheckCommit, ctsToken);
                         }
                     }
 
@@ -518,6 +521,11 @@
         private void OnCommitting(CommittingEventArgs e)
         {
             Committing?.Invoke(this,e);
+        }
+
+        private void OnCheckCommit(int resourceId, UploadSession uploadSession, int timesCalled)
+        {
+            CheckingCommit?.Invoke(this, new CheckingCommitEventArgs(resourceId, uploadSession.SessionId, timesCalled));
         }
 
         private IFileServiceClient CreateFileServiceClient()
