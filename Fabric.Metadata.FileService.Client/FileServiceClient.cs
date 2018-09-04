@@ -35,7 +35,7 @@
         private const string ApplicationJsonMediaType = "application/json";
         private const string ApplicationOctetStreamMediaType = "application/octet-stream";
         private const int SecondsBetweenRetries = 2;
-        private const int MaxRetryCount = 3;
+        private const int MaxRetryCount = 5;
 
         // make HttpClient static per https://aspnetmonsters.com/2016/08/2016-08-27-httpclientwrong/
         private static HttpClient _httpClient;
@@ -294,6 +294,8 @@
                         // ReSharper disable once AccessToDisposedClosure
                         await stream.CopyToAsync(memoryStream);
 
+                        memoryStream.Seek(0, SeekOrigin.Begin);
+
                         var fileContent = new StreamContent(memoryStream);
 
                         fileContent.Headers.ContentDisposition = new
@@ -329,17 +331,17 @@
                             PartsUploaded = this.numberOfPartsUploaded
                         };
                     }
-                default:
-                    {
-                        return new UploadStreamResult
-                        {
-                            StatusCode = httpResponse.StatusCode,
-                            Error = content,
-                            FullUri = fullUri
-                        };
-                    }
-            }
 
+                default:
+                {
+                    return new UploadStreamResult
+                    {
+                        StatusCode = httpResponse.StatusCode,
+                        Error = content,
+                        FullUri = fullUri
+                    };
+                }
+            }
         }
 
         /// <inheritdoc />
@@ -419,6 +421,95 @@
 
                         return result;
                     }
+
+                case HttpStatusCode.Accepted:
+                {
+                    // the server is processing this asynchronously
+                    var result = new CommitResult
+                    {
+                        StatusCode = httpResponse.StatusCode,
+                        FullUri = fullUri
+                    };
+
+                    return result;
+                }
+
+                case HttpStatusCode.BadRequest:
+                    {
+                        dynamic clientResponse = JsonConvert.DeserializeObject(content);
+                        var errorCode = clientResponse["ErrorCode"] != null
+                            ? Convert.ToString(clientResponse["ErrorCode"])
+                            : null;
+
+                        return new CommitResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            FullUri = fullUri,
+                            ErrorCode = errorCode,
+                            Error = content
+                        };
+                    }
+                default:
+                    {
+                        return new CommitResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            Error = content,
+                            FullUri = fullUri
+                        };
+                    }
+            }
+        }
+
+        public async Task<CommitResult> CheckCommitAsync(int resourceId, Guid sessionId)
+        {
+            if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
+
+            var fullUri = new Uri(this.mdsBaseUrl, $"Files({resourceId})/UploadSessions({sessionId})/MetadataService.CheckCommit");
+
+            var method = Convert.ToString(HttpMethod.Get);
+
+            await this.SetAuthorizationHeaderInHttpClientAsync(resourceId);
+
+            OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
+
+            var policy = GetRetryPolicy(resourceId, method, fullUri);
+
+            var httpResponse = await policy
+                .ExecuteAsync(() => _httpClient.GetAsync(fullUri));
+
+            var content = await httpResponse.Content.ReadAsStringAsync();
+
+            OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString(), content));
+
+            switch (httpResponse.StatusCode)
+            {
+                case HttpStatusCode.OK:
+                    {
+                        var clientResponse = JsonConvert.DeserializeObject<UploadSession>(content);
+
+                        var result = new CommitResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            FullUri = fullUri,
+                            Session = clientResponse
+                        };
+
+                        return result;
+                    }
+
+                case HttpStatusCode.Accepted:
+                {
+                    // the server is processing this asynchronously
+                    var result = new CommitResult
+                    {
+                        StatusCode = httpResponse.StatusCode,
+                        FullUri = fullUri
+                    };
+
+                    return result;
+                }
+
                 case HttpStatusCode.BadRequest:
                     {
                         dynamic clientResponse = JsonConvert.DeserializeObject(content);
@@ -632,7 +723,7 @@
                 .Handle<HttpRequestException>()
                 .Or<TaskCanceledException>()
                 .OrResult<HttpResponseMessage>(message => httpStatusCodesWorthRetrying.Contains(message.StatusCode))
-                .WaitAndRetryAsync(MaxRetryCount, i => TimeSpan.FromSeconds(SecondsBetweenRetries),
+                .WaitAndRetryAsync(MaxRetryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(SecondsBetweenRetries, retryAttempt)),
                     async (result, timeSpan, retryCount, context) =>
                     {
                         if (result.Result != null)

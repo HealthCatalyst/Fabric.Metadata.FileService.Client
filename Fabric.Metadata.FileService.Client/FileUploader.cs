@@ -9,6 +9,7 @@
     using System.Threading;
     using Events;
     using Exceptions;
+    using FileServiceResults;
     using Interfaces;
     using Structures;
 
@@ -33,6 +34,9 @@
         private readonly IAccessTokenRepository accessTokenRepository;
         private readonly Uri mdsBaseUrl;
         private readonly Stopwatch watch;
+
+        private const int SecondsToSleepBetweenCallingCheckCommit = 5;
+        private const int NumberOfTimesToCallCheckCommit = 50;
 
         public FileUploader(
             IAccessTokenRepository accessTokenRepository,
@@ -72,8 +76,9 @@
 
             var fileSplitter = new FileSplitter();
             var fileName = Path.GetFileName(filePath);
+            var fullFileSize = new FileInfo(filePath).Length;
 
-            OnCalculatingHash(new CalculatingHashEventArgs(resourceId, filePath));
+            OnCalculatingHash(new CalculatingHashEventArgs(resourceId, filePath, fullFileSize));
             var hashForFile = new MD5FileHasher().CalculateHashForFile(filePath);
 
             // if there is no access token just error out now
@@ -104,8 +109,6 @@
                     var uploadSession = await CreateNewUploadSessionAsync(fileServiceClient, resourceId);
                     ctsToken.ThrowIfCancellationRequested();
 
-                    var fullFileSize = new FileInfo(filePath).Length;
-
                     var countOfFileParts =
                         fileSplitter.GetCountOfFileParts(uploadSession.FileUploadChunkSizeInBytes, fullFileSize);
 
@@ -124,7 +127,24 @@
                         });
 
                     OnCommitting(new CommittingEventArgs(resourceId, uploadSession.SessionId, fileName, hashForFile, fullFileSize, fileParts));
-                    await CommitAsync(fileServiceClient, resourceId, uploadSession.SessionId, fileName, hashForFile, fullFileSize, fileParts);
+
+                    var commitResult = await CommitAsync(fileServiceClient, resourceId, uploadSession.SessionId, fileName, hashForFile, fullFileSize, fileParts);
+
+                    if (commitResult.StatusCode == HttpStatusCode.Accepted)
+                    {
+                        for (int i = 0; i < NumberOfTimesToCallCheckCommit; i++)
+                        {
+                            commitResult = await CheckCommitAsync(fileServiceClient, resourceId,
+                                uploadSession.SessionId, fileName);
+                            if (commitResult.StatusCode != HttpStatusCode.Accepted) break;
+                            Thread.Sleep(SecondsToSleepBetweenCallingCheckCommit);
+                        }
+                    }
+
+                    if (commitResult.StatusCode == HttpStatusCode.Accepted)
+                    {
+                        throw new InvalidOperationException("Server was not able to commit the file.  Please try again.");
+                    }
                 }
                 finally
                 {
@@ -317,7 +337,7 @@
 
         }
 
-        private async Task CommitAsync(
+        private async Task<CommitResult> CommitAsync(
             IFileServiceClient fileServiceClient, 
             int resourceId, 
             Guid sessionId,
@@ -352,7 +372,53 @@
                         result.Session.SessionStartedDateTimeUtc,
                         result.Session.SessionFinishedDateTimeUtc,
                         result.Session.SessionStartedBy));
-                    break;
+                    return result;
+
+                case HttpStatusCode.Accepted:
+                {
+                    return result;
+                }
+
+                default:
+                    OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
+                    throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
+            }
+        }
+
+        private async Task<CommitResult> CheckCommitAsync(
+            IFileServiceClient fileServiceClient,
+            int resourceId,
+            Guid sessionId, 
+            string fileName)
+        {
+            if (fileServiceClient == null)
+            {
+                throw new ArgumentNullException(nameof(fileServiceClient));
+            }
+
+            if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
+            if (sessionId == default(Guid)) throw new ArgumentOutOfRangeException(nameof(sessionId));
+
+            var result = await fileServiceClient.CheckCommitAsync(resourceId, sessionId);
+
+            switch (result.StatusCode)
+            {
+                case HttpStatusCode.OK:
+                    OnFileUploadCompleted(new FileUploadCompletedEventArgs(
+                        resourceId,
+                        sessionId,
+                        fileName,
+                        result.Session.FileHash,
+                        result.Session.SessionStartedDateTimeUtc,
+                        result.Session.SessionFinishedDateTimeUtc,
+                        result.Session.SessionStartedBy));
+
+                    return result;
+
+                case HttpStatusCode.Accepted:
+                {
+                    return result;
+                }
 
                 default:
                     OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));

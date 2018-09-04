@@ -76,5 +76,7 @@
         /// <param name="resourceId"></param>
         /// <returns></returns>
         Task<DeleteSessionResult> DeleteUploadSessionAsync(int resourceId);
+
+        Task<CommitResult> CheckCommitAsync(int resourceId, Guid sessionId);
     }
 }
