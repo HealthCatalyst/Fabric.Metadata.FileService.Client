@@ -37,8 +37,8 @@
         private readonly Uri mdsBaseUrl;
         private readonly Stopwatch watch;
 
-        private const int SecondsToSleepBetweenCallingCheckCommit = 5;
-        private const int NumberOfTimesToCallCheckCommit = 50;
+        private const int SecondsToSleepBetweenCallingCheckCommit = 10;
+        private const int NumberOfTimesToCallCheckCommit = 60;
 
         public FileUploader(
             IFileServiceAccessTokenRepository fileServiceAccessTokenRepository,
