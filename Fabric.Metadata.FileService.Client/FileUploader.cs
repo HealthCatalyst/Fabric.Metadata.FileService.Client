@@ -12,6 +12,7 @@
     using FileServiceResults;
     using Interfaces;
     using Structures;
+    using Utils;
 
     public class FileUploader : IFileUploader
     {
@@ -79,9 +80,6 @@
             var fileName = Path.GetFileName(filePath);
             var fullFileSize = new FileInfo(filePath).Length;
 
-            OnCalculatingHash(new CalculatingHashEventArgs(resourceId, filePath, fullFileSize));
-            var hashForFile = new MD5FileHasher().CalculateHashForFile(filePath);
-
             // if there is no access token just error out now
             string accessToken = await this.accessTokenRepository.GetAccessTokenAsync();
             if (string.IsNullOrWhiteSpace(accessToken))
@@ -100,7 +98,11 @@
                 try
                 {
                     // first check if the server already has the file
-                    bool fileAlreadyExists = await CheckIfFileExistsOnServerAsync(fileServiceClient, resourceId, filePath, hashForFile);
+                    var checkFileResult =
+                        await CheckIfFileExistsOnServerAsync(fileServiceClient, resourceId, filePath, fullFileSize);
+
+                    bool fileAlreadyExists = checkFileResult.FileNeedsUploading;
+                    string hashForFile = checkFileResult.HashForFile;
 
                     ctsToken.ThrowIfCancellationRequested();
 
@@ -113,40 +115,61 @@
                     var countOfFileParts =
                         fileSplitter.GetCountOfFileParts(uploadSession.FileUploadChunkSizeInBytes, fullFileSize);
 
-                    OnFileUploadStarted(new FileUploadStartedEventArgs(resourceId, uploadSession.SessionId, fileName,
+                    OnFileUploadStarted(new FileUploadStartedEventArgs(resourceId, uploadSession.SessionId,
+                        fileName,
                         countOfFileParts));
 
                     this.watch.Restart();
 
-                    var fileParts = await fileSplitter.SplitFile(filePath, fileName,
-                        uploadSession.FileUploadChunkSizeInBytes,
-                        uploadSession.FileUploadMaxFileSizeInMegabytes,
-                        async (stream, part) =>
-                        {
-                            ctsToken.ThrowIfCancellationRequested();
-                            // ReSharper disable once AccessToDisposedClosure
-                            await this.UploadFilePartStreamAsync(fileServiceClient, stream, part, resourceId, uploadSession.SessionId, fileName, fullFileSize, countOfFileParts);
-                        });
-
-                    OnCommitting(new CommittingEventArgs(resourceId, uploadSession.SessionId, fileName, hashForFile, fullFileSize, fileParts));
-
-                    var commitResult = await CommitAsync(fileServiceClient, resourceId, uploadSession.SessionId, fileName, hashForFile, fullFileSize, fileParts);
-
-                    if (commitResult.StatusCode == HttpStatusCode.Accepted)
+                    using (var md5Hasher = new Md5AppendingHasher())
                     {
-                        for (int timesCalled = 0; timesCalled < NumberOfTimesToCallCheckCommit; timesCalled++)
+                        var fileParts = await fileSplitter.SplitFile(filePath, fileName,
+                            uploadSession.FileUploadChunkSizeInBytes,
+                            uploadSession.FileUploadMaxFileSizeInMegabytes,
+                            async (stream, part) =>
+                            {
+                                ctsToken.ThrowIfCancellationRequested();
+                                // ReSharper disable AccessToDisposedClosure
+                                await this.UploadFilePartStreamAsync(fileServiceClient, stream, part, resourceId,
+                                uploadSession.SessionId, fileName, fullFileSize, countOfFileParts);
+                                // ReSharper disable once AccessToModifiedClosure
+                                if (string.IsNullOrEmpty(hashForFile))
+                                {
+                                    md5Hasher.Append(stream);
+                                }
+                                // ReSharper restore AccessToDisposedClosure
+                            });
+
+                        if (string.IsNullOrEmpty(hashForFile))
                         {
-                            OnCheckCommit(resourceId, uploadSession, timesCalled);
-                            commitResult = await CheckCommitAsync(fileServiceClient, resourceId,
-                                uploadSession.SessionId, fileName);
-                            if (commitResult.StatusCode != HttpStatusCode.Accepted) break;
-                            await Task.Delay(SecondsToSleepBetweenCallingCheckCommit, ctsToken);
+                            // if hash was not already calculated then calculate it now
+                            hashForFile = md5Hasher.FinalizeAndGetHash();
                         }
-                    }
 
-                    if (commitResult.StatusCode == HttpStatusCode.Accepted)
-                    {
-                        throw new InvalidOperationException("Server was not able to commit the file.  Please try again.");
+                        OnCommitting(new CommittingEventArgs(resourceId, uploadSession.SessionId, fileName,
+                            hashForFile,
+                            fullFileSize, fileParts));
+
+                        var commitResult = await CommitAsync(fileServiceClient, resourceId, uploadSession.SessionId,
+                            fileName, hashForFile, fullFileSize, fileParts);
+
+                        if (commitResult.StatusCode == HttpStatusCode.Accepted)
+                        {
+                            for (int timesCalled = 0; timesCalled < NumberOfTimesToCallCheckCommit; timesCalled++)
+                            {
+                                OnCheckCommit(resourceId, uploadSession, timesCalled);
+                                commitResult = await CheckCommitAsync(fileServiceClient, resourceId,
+                                    uploadSession.SessionId, fileName);
+                                if (commitResult.StatusCode != HttpStatusCode.Accepted) break;
+                                await Task.Delay(SecondsToSleepBetweenCallingCheckCommit, ctsToken);
+                            }
+                        }
+
+                        if (commitResult.StatusCode == HttpStatusCode.Accepted)
+                        {
+                            throw new InvalidOperationException(
+                                "Server was not able to commit the file.  Please try again.");
+                        }
                     }
                 }
                 finally
@@ -196,8 +219,8 @@
             }
         }
 
-        private async Task<bool> CheckIfFileExistsOnServerAsync(IFileServiceClient fileServiceClient, int resourceId,
-            string filePath, string hashForFile)
+        private async Task<UploaderCheckFileResult> CheckIfFileExistsOnServerAsync(IFileServiceClient fileServiceClient, int resourceId,
+            string filePath, long fullFileSize)
         {
             if (fileServiceClient == null)
             {
@@ -212,8 +235,14 @@
             {
                 case HttpStatusCode.NoContent:
                     {
-                        if (result.HashForFileOnServer != null)
+                        // if server has the file and the filename is the same then do a hash check to see if file needs uploading
+                        if (result.FileNameOnServer != null
+                            && result.FileNameOnServer.Equals(Path.GetFileName(filePath)) 
+                            && result.HashForFileOnServer != null)
                         {
+                            OnCalculatingHash(new CalculatingHashEventArgs(resourceId, filePath, fullFileSize));
+                            var hashForFile = new MD5FileHasher().CalculateHashForFile(filePath);
+
                             OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile,
                                 result.HashForFileOnServer, result.LastModified,
                                 result.FileNameOnServer, hashForFile == result.HashForFileOnServer));
@@ -221,7 +250,12 @@
                             if (hashForFile == result.HashForFileOnServer
                                 && Path.GetFileName(filePath) == Path.GetFileName(result.FileNameOnServer))
                             {
-                                return true;
+                                return new UploaderCheckFileResult
+                                {
+                                    FileNeedsUploading = true,
+                                    HashForFile = hashForFile,
+                                    HashForFileOnServer = result.HashForFileOnServer
+                                };
                             }
                         }
 
@@ -237,7 +271,10 @@
                     throw new FileUploaderException(result.FullUri, result.StatusCode.ToString(), result.Error);
             }
 
-            return false;
+            return new UploaderCheckFileResult
+            {
+                FileNeedsUploading = false
+            };
         }
 
         private async Task<UploadSession> CreateNewUploadSessionAsync(IFileServiceClient fileServiceClient,
@@ -295,7 +332,7 @@
         }
 
         private async Task UploadFilePartStreamAsync(
-            IFileServiceClient fileServiceClient, 
+            IFileServiceClient fileServiceClient,
             Stream stream,
             FilePart filePart,
             int resourceId,
@@ -341,12 +378,12 @@
         }
 
         private async Task<CommitResult> CommitAsync(
-            IFileServiceClient fileServiceClient, 
-            int resourceId, 
+            IFileServiceClient fileServiceClient,
+            int resourceId,
             Guid sessionId,
-            string filename, 
-            string fileHash, 
-            long fileSize, 
+            string filename,
+            string fileHash,
+            long fileSize,
             IList<FilePart> utFileParts)
         {
             if (filename == null) throw new ArgumentNullException(nameof(filename));
@@ -378,9 +415,9 @@
                     return result;
 
                 case HttpStatusCode.Accepted:
-                {
-                    return result;
-                }
+                    {
+                        return result;
+                    }
 
                 default:
                     OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
@@ -391,7 +428,7 @@
         private async Task<CommitResult> CheckCommitAsync(
             IFileServiceClient fileServiceClient,
             int resourceId,
-            Guid sessionId, 
+            Guid sessionId,
             string fileName)
         {
             if (fileServiceClient == null)
@@ -419,9 +456,9 @@
                     return result;
 
                 case HttpStatusCode.Accepted:
-                {
-                    return result;
-                }
+                    {
+                        return result;
+                    }
 
                 default:
                     OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(), result.Error));
@@ -520,7 +557,7 @@
 
         private void OnCommitting(CommittingEventArgs e)
         {
-            Committing?.Invoke(this,e);
+            Committing?.Invoke(this, e);
         }
 
         private void OnCheckCommit(int resourceId, UploadSession uploadSession, int timesCalled)
@@ -532,6 +569,13 @@
         {
             return fileServiceClientFactory.CreateFileServiceClient(this.accessTokenRepository, this.mdsBaseUrl);
         }
+    }
+
+    public class UploaderCheckFileResult
+    {
+        public bool FileNeedsUploading { get; set; }
+        public string HashForFile { get; set; }
+        public string HashForFileOnServer { get; set; }
     }
 }
 

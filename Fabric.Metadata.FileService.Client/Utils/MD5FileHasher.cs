@@ -1,11 +1,9 @@
-﻿namespace Fabric.Metadata.FileService.Client
+﻿namespace Fabric.Metadata.FileService.Client.Utils
 {
     using System;
-    using System.Collections.Generic;
     using System.Diagnostics.Contracts;
     using System.IO;
     using System.Security.Cryptography;
-    using System.Text;
 
     // ReSharper disable once InconsistentNaming
     public class MD5FileHasher

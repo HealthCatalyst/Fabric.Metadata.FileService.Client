@@ -11,6 +11,7 @@
     using Microsoft.VisualStudio.TestTools.UnitTesting;
     using Moq;
     using Structures;
+    using Utils;
 
     [TestClass]
     public class FileUploaderTests

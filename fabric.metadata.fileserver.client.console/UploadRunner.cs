@@ -63,6 +63,9 @@
             fileUploader.TransientError += FileUploader_TransientError;
             fileUploader.AccessTokenRequested += FileUploader_AccessTokenRequested;
             fileUploader.NewAccessTokenRequested += FileUploader_NewAccessTokenRequested;
+            fileUploader.CalculatingHash += FileUploader_CalculatingHash;
+            fileUploader.Committing += FileUploader_Committing;
+            fileUploader.CheckingCommit += FileUploader_CheckingCommit;
 
             Properties.Settings.Default.Save();
 
@@ -79,6 +82,21 @@
                     throw;
                 }
             }
+        }
+
+        private void FileUploader_CheckingCommit(object sender, Fabric.Metadata.FileService.Client.Events.CheckingCommitEventArgs e)
+        {
+            Console.WriteLine($"Checking Commit: Times called: {e.TimesCalled}");
+        }
+
+        private void FileUploader_Committing(object sender, Fabric.Metadata.FileService.Client.Events.CommittingEventArgs e)
+        {
+            Console.WriteLine($"Committing: {e.FileName}");
+        }
+
+        private void FileUploader_CalculatingHash(object sender, Fabric.Metadata.FileService.Client.Events.CalculatingHashEventArgs e)
+        {
+            Console.WriteLine($"Calculating hash: file size: {e.FileSize}");
         }
 
         private void FileUploader_FileChecked(object sender, Fabric.Metadata.FileService.Client.Events.FileCheckedEventArgs e)

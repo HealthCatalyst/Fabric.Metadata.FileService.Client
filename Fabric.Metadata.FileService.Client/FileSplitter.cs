@@ -8,6 +8,7 @@ namespace Fabric.Metadata.FileService.Client
     using System.Threading.Tasks;
     using Interfaces;
     using Structures;
+    using Utils;
 
     /// <inheritdoc />
     public class FileSplitter : IFileSplitter

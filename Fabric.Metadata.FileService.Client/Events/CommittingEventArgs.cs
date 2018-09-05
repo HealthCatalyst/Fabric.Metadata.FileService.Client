@@ -6,10 +6,10 @@
 
     public class CommittingEventArgs : EventArgs
     {
-        public CommittingEventArgs(int resourceId, Guid uploadSessionSessionId, string fileName, string hashForFile, long fullFileSize, IList<FilePart> fileParts)
+        public CommittingEventArgs(int resourceId, Guid sessionId, string fileName, string hashForFile, long fullFileSize, IList<FilePart> fileParts)
         {
             ResourceId = resourceId;
-            UploadSessionSessionId = uploadSessionSessionId;
+            SessionId = sessionId;
             FileName = fileName;
             HashForFile = hashForFile;
             FullFileSize = fullFileSize;
@@ -17,7 +17,7 @@
         }
 
         public int ResourceId { get; }
-        public Guid UploadSessionSessionId { get; }
+        public Guid SessionId { get; }
         public string FileName { get; }
         public string HashForFile { get; }
         public long FullFileSize { get; }
