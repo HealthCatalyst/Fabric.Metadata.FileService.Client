@@ -51,7 +51,7 @@
 
             Properties.Settings.Default.MdsV2Url = mdsV2Url.ToString();
 
-            var fileUploader = new FileUploader(new AccessTokenRepository(accessToken), mdsV2Url);
+            var fileUploader = new FileUploader(new FileServiceAccessTokenRepository(accessToken), mdsV2Url);
             fileUploader.Navigating += FileUploader_Navigating;
             fileUploader.Navigated += FileUploader_Navigated;
             fileUploader.PartUploaded += FileUploader_PartUploaded;
@@ -86,17 +86,17 @@
 
         private void FileUploader_CheckingCommit(object sender, Fabric.Metadata.FileService.Client.Events.CheckingCommitEventArgs e)
         {
-            Console.WriteLine($"Checking Commit: Times called: {e.TimesCalled}");
+            Console.WriteLine($"[{DateTime.Now:T}] Checking Commit: Times called: {e.TimesCalled}");
         }
 
         private void FileUploader_Committing(object sender, Fabric.Metadata.FileService.Client.Events.CommittingEventArgs e)
         {
-            Console.WriteLine($"Committing: {e.FileName}");
+            Console.WriteLine($"[{DateTime.Now:T}] Committing: {e.FileName}");
         }
 
         private void FileUploader_CalculatingHash(object sender, Fabric.Metadata.FileService.Client.Events.CalculatingHashEventArgs e)
         {
-            Console.WriteLine($"Calculating hash: file size: {e.FileSize}");
+            Console.WriteLine($"[{DateTime.Now:T}] Calculating hash: file size: {e.FileSize}");
         }
 
         private void FileUploader_FileChecked(object sender, Fabric.Metadata.FileService.Client.Events.FileCheckedEventArgs e)
@@ -105,58 +105,58 @@
 
             if (e.DidHashMatch)
             {
-                Console.WriteLine($"File matched: filename(server):[{e.FileNameOnServer}] lastmodified(server):{e.LastUploadedToServer} Hash(local):[{e.HashForLocalFile}], Hash(server):[{e.HashOnServer}]");
+                Console.WriteLine($"[{DateTime.Now:T}] File matched: filename(server):[{e.FileNameOnServer}] lastmodified(server):{e.LastUploadedToServer} Hash(local):[{e.HashForLocalFile}], Hash(server):[{e.HashOnServer}]");
             }
             else
             {
-                Console.WriteLine($"File NOT matched: {fileFound} filename(server): {e.FileNameOnServer} lastmodified(server):{e.LastUploadedToServer} Hash(local):[{e.HashForLocalFile}], Hash(server):[{e.HashOnServer}]");
+                Console.WriteLine($"[{DateTime.Now:T}] File NOT matched: {fileFound} filename(server): {e.FileNameOnServer} lastmodified(server):{e.LastUploadedToServer} Hash(local):[{e.HashForLocalFile}], Hash(server):[{e.HashOnServer}]");
             }
 
         }
 
         private void FileUploader_SessionCreated(object sender, Fabric.Metadata.FileService.Client.Events.SessionCreatedEventArgs e)
         {
-            Console.WriteLine($"Session created: {e.SessionId}, Chunk size (bytes): {e.ChunkSizeInBytes}, Max File Size (MB): {e.MaxFileSizeInMegabytes}");
+            Console.WriteLine($"[{DateTime.Now:T}] Session created: {e.SessionId}, Chunk size (bytes): {e.ChunkSizeInBytes}, Max File Size (MB): {e.MaxFileSizeInMegabytes}");
         }
 
         private void FileUploader_UploadError(object sender, Fabric.Metadata.FileService.Client.Events.UploadErrorEventArgs e)
         {
-            Console.WriteLine("File Upload Error: " + e.Response);
+            Console.WriteLine("[{DateTime.Now:T}] File Upload Error: " + e.Response);
         }
 
         private void FileUploader_FileUploadCompleted(object sender, Fabric.Metadata.FileService.Client.Events.FileUploadCompletedEventArgs e)
         {
-            Console.WriteLine($"File Upload Completed: {e.FileName}, File Hash: {e.FileHash}, Session Finished: {e.SessionFinishedDateTimeUtc}");
+            Console.WriteLine($"[{DateTime.Now:T}] File Upload Completed: {e.FileName}, File Hash: {e.FileHash}, Session Finished: {e.SessionFinishedDateTimeUtc}");
         }
         private void FileUploader_FileUploadStarted(object sender, Fabric.Metadata.FileService.Client.Events.FileUploadStartedEventArgs e)
         {
-            Console.WriteLine($"File Upload Started: {e.FileName} Parts={e.TotalFileParts}");
+            Console.WriteLine($"[{DateTime.Now:T}] File Upload Started: {e.FileName} Parts={e.TotalFileParts}");
         }
 
         private void FileUploader_PartUploaded(object sender, Fabric.Metadata.FileService.Client.Events.PartUploadedEventArgs e)
         {
             var estimatedTimeRemaining = e.EstimatedTimeRemaining.ToString(@"hh\:mm\:ss\.f");
-            Console.WriteLine($"Part Uploaded: {e.FileName} ({e.NumPartsUploaded}/{e.TotalFileParts}) {e.StatusCode}.  Est: {estimatedTimeRemaining}");
+            Console.WriteLine($"[{DateTime.Now:T}] Part Uploaded: {e.FileName} ({e.NumPartsUploaded}/{e.TotalFileParts}) {e.StatusCode}.  Est: {estimatedTimeRemaining}");
         }
 
         private void FileUploader_Navigated(object sender, Fabric.Metadata.FileService.Client.Events.NavigatedEventArgs e)
         {
-            Console.WriteLine($"{e.Method} {e.FullUri} {e.StatusCode}");
+            Console.WriteLine($"[{DateTime.Now:T}] {e.Method} {e.FullUri} {e.StatusCode}");
         }
 
         private void FileUploader_Navigating(object sender, Fabric.Metadata.FileService.Client.Events.NavigatingEventArgs e)
         {
-            Console.WriteLine($"{e.Method} {e.FullUri}");
+            Console.WriteLine($"[{DateTime.Now:T}] {e.Method} {e.FullUri}");
         }
 
         private void FileUploader_TransientError(object sender, Fabric.Metadata.FileService.Client.Events.TransientErrorEventArgs e)
         {
-            Console.WriteLine($"Transient Error {e.Method} {e.FullUri} {e.StatusCode} {e.Response}.  Retry count {e.RetryCount}/{e.MaxRetryCount}.");
+            Console.WriteLine($"[{DateTime.Now:T}] Transient Error {e.Method} {e.FullUri} {e.StatusCode} {e.Response}.  Retry count {e.RetryCount}/{e.MaxRetryCount}.");
         }
 
         private void FileUploader_NewAccessTokenRequested(object sender, Fabric.Metadata.FileService.Client.Events.NewAccessTokenRequestedEventArgs e)
         {
-            Console.WriteLine($"New Access token requested for resource: {e.ResourceId}");
+            Console.WriteLine($"[{DateTime.Now:T}] New Access token requested for resource: {e.ResourceId}");
         }
 
         private void FileUploader_AccessTokenRequested(object sender, Fabric.Metadata.FileService.Client.Events.AccessTokenRequestedEventArgs e)

@@ -39,7 +39,7 @@
 
         // make HttpClient static per https://aspnetmonsters.com/2016/08/2016-08-27-httpclientwrong/
         private static HttpClient _httpClient;
-        private readonly IAccessTokenRepository accessTokenRepository;
+        private readonly IFileServiceAccessTokenRepository fileServiceAccessTokenRepository;
         private readonly Uri mdsBaseUrl;
         private int numberOfPartsUploaded;
 
@@ -55,11 +55,11 @@
 
         public static TimeSpan HttpTimeout = TimeSpan.FromMinutes(5);
 
-        public FileServiceClient(IAccessTokenRepository accessTokenRepository, Uri mdsBaseUrl, HttpMessageHandler httpClientHandler)
+        public FileServiceClient(IFileServiceAccessTokenRepository fileServiceAccessTokenRepository, Uri mdsBaseUrl, HttpMessageHandler httpClientHandler)
         {
-            if (accessTokenRepository == null)
+            if (fileServiceAccessTokenRepository == null)
             {
-                throw new ArgumentNullException(nameof(accessTokenRepository));
+                throw new ArgumentNullException(nameof(fileServiceAccessTokenRepository));
             }
 
             if (string.IsNullOrWhiteSpace(mdsBaseUrl.ToString()))
@@ -77,7 +77,7 @@
                 throw new InvalidOperationException($"MDS Url, '{mdsBaseUrl}' is not a well formed url.");
             }
 
-            this.accessTokenRepository = accessTokenRepository;
+            this.fileServiceAccessTokenRepository = fileServiceAccessTokenRepository;
             this.mdsBaseUrl = mdsBaseUrl;
 
             if (_httpClient == null)
@@ -696,7 +696,7 @@
         {
             OnAccessTokenRequested(new AccessTokenRequestedEventArgs(resourceId));
 
-            var accessToken = await accessTokenRepository.GetAccessTokenAsync();
+            var accessToken = await fileServiceAccessTokenRepository.GetAccessTokenAsync();
             if (string.IsNullOrWhiteSpace(accessToken))
             {
                 throw new InvalidAccessTokenException(accessToken);
@@ -708,7 +708,7 @@
         {
             OnNewAccessTokenRequested(new NewAccessTokenRequestedEventArgs(resourceId));
 
-            var accessToken = await accessTokenRepository.GetNewAccessTokenAsync();
+            var accessToken = await fileServiceAccessTokenRepository.GetNewAccessTokenAsync();
             if (string.IsNullOrWhiteSpace(accessToken))
             {
                 throw new InvalidAccessTokenException(accessToken);

@@ -31,13 +31,13 @@
 
             var mockFileServiceFactory = new Mock<IFileServiceClientFactory>();
 
-            var mockAccessTokenRepository = new Mock<IAccessTokenRepository>();
+            var mockAccessTokenRepository = new Mock<IFileServiceAccessTokenRepository>();
             mockAccessTokenRepository.Setup(
                     service => service.GetAccessTokenAsync())
                 .ReturnsAsync(accessToken);
 
             mockFileServiceFactory.Setup(
-                    service => service.CreateFileServiceClient(It.IsAny<IAccessTokenRepository>(), It.IsAny<Uri>()))
+                    service => service.CreateFileServiceClient(It.IsAny<IFileServiceAccessTokenRepository>(), It.IsAny<Uri>()))
                 .Returns(mockFileService.Object);
 
             this.classUnderTest = new FileUploader(mockFileServiceFactory.Object, mockAccessTokenRepository.Object, this.mdsBaseUrl);

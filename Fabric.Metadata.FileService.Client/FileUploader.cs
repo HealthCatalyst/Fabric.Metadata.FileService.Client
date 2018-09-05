@@ -33,7 +33,7 @@
         public event NewAccessTokenRequestedEventHandler NewAccessTokenRequested;
 
         private readonly IFileServiceClientFactory fileServiceClientFactory;
-        private readonly IAccessTokenRepository accessTokenRepository;
+        private readonly IFileServiceAccessTokenRepository fileServiceAccessTokenRepository;
         private readonly Uri mdsBaseUrl;
         private readonly Stopwatch watch;
 
@@ -41,24 +41,24 @@
         private const int NumberOfTimesToCallCheckCommit = 50;
 
         public FileUploader(
-            IAccessTokenRepository accessTokenRepository,
+            IFileServiceAccessTokenRepository fileServiceAccessTokenRepository,
             Uri mdsBaseUrl)
-            : this(new FileServiceClientFactory(), accessTokenRepository, mdsBaseUrl)
+            : this(new FileServiceClientFactory(), fileServiceAccessTokenRepository, mdsBaseUrl)
         {
         }
 
         public FileUploader(IFileServiceClientFactory fileServiceClientFactory,
-            IAccessTokenRepository accessTokenRepository,
+            IFileServiceAccessTokenRepository fileServiceAccessTokenRepository,
             Uri mdsBaseUrl)
         {
             this.fileServiceClientFactory = fileServiceClientFactory;
             // ReSharper disable once JoinNullCheckWithUsage
-            if (accessTokenRepository == null)
+            if (fileServiceAccessTokenRepository == null)
             {
-                throw new ArgumentNullException(nameof(accessTokenRepository));
+                throw new ArgumentNullException(nameof(fileServiceAccessTokenRepository));
             }
 
-            this.accessTokenRepository = accessTokenRepository;
+            this.fileServiceAccessTokenRepository = fileServiceAccessTokenRepository;
 
             if (!mdsBaseUrl.ToString().EndsWith(@"/"))
             {
@@ -81,7 +81,7 @@
             var fullFileSize = new FileInfo(filePath).Length;
 
             // if there is no access token just error out now
-            string accessToken = await this.accessTokenRepository.GetAccessTokenAsync();
+            string accessToken = await this.fileServiceAccessTokenRepository.GetAccessTokenAsync();
             if (string.IsNullOrWhiteSpace(accessToken))
             {
                 throw new InvalidAccessTokenException(accessToken);
@@ -567,7 +567,7 @@
 
         private IFileServiceClient CreateFileServiceClient()
         {
-            return fileServiceClientFactory.CreateFileServiceClient(this.accessTokenRepository, this.mdsBaseUrl);
+            return fileServiceClientFactory.CreateFileServiceClient(this.fileServiceAccessTokenRepository, this.mdsBaseUrl);
         }
     }
 

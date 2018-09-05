@@ -18,14 +18,14 @@
     public class FileServiceClientTests
     {
         private string accessToken;
-        private Mock<IAccessTokenRepository> mockAccessTokenRepository;
+        private Mock<IFileServiceAccessTokenRepository> mockAccessTokenRepository;
 
         [TestInitialize]
         public void TestInitialize()
         {
             this.accessToken = "MyAccessToken";
 
-            this.mockAccessTokenRepository = new Mock<IAccessTokenRepository>();
+            this.mockAccessTokenRepository = new Mock<IFileServiceAccessTokenRepository>();
             mockAccessTokenRepository.Setup(
                     service => service.GetAccessTokenAsync())
                 .ReturnsAsync(accessToken);

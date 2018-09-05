@@ -5,11 +5,11 @@
 
     using Fabric.Metadata.FileService.Client.Interfaces;
 
-    class AccessTokenRepository : IAccessTokenRepository
+    class FileServiceAccessTokenRepository : IFileServiceAccessTokenRepository
     {
         private readonly string accessToken;
 
-        public AccessTokenRepository(string accessToken)
+        public FileServiceAccessTokenRepository(string accessToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
             {
