@@ -1,0 +1,14 @@
+queue: 'Hosted Linux Preview'
+
+variables:
+  buildConfiguration: 'Release'
+
+steps:
+- script: |
+    dotnet build --configuration $(buildConfiguration)
+    dotnet test Fabric.Metadata.FileService.Client.Tests --configuration $(buildConfiguration) --logger trx
+
+- task: PublishTestResults@2
+  inputs:
+    testRunner: VSTest
+    testResultsFiles: '**/*.trx'
