@@ -20,6 +20,7 @@
         private FileUploader classUnderTest;
         private Mock<IFileServiceClient> mockFileService;
         private Uri mdsBaseUrl;
+        private CancellationToken cancellationToken;
 
         [TestInitialize]
         public void TestInitialize()
@@ -31,13 +32,15 @@
 
             var mockFileServiceFactory = new Mock<IFileServiceClientFactory>();
 
+            this.cancellationToken = new CancellationToken();
+
             var mockAccessTokenRepository = new Mock<IFileServiceAccessTokenRepository>();
             mockAccessTokenRepository.Setup(
                     service => service.GetAccessTokenAsync())
                 .ReturnsAsync(accessToken);
 
             mockFileServiceFactory.Setup(
-                    service => service.CreateFileServiceClient(It.IsAny<IFileServiceAccessTokenRepository>(), It.IsAny<Uri>()))
+                    service => service.CreateFileServiceClient(It.IsAny<IFileServiceAccessTokenRepository>(), It.IsAny<Uri>(), this.cancellationToken))
                 .Returns(mockFileService.Object);
 
             this.classUnderTest = new FileUploader(mockFileServiceFactory.Object, mockAccessTokenRepository.Object, this.mdsBaseUrl);
@@ -108,10 +111,7 @@
                 .ReturnsAsync(commitResult);
 
             // act
-            using (CancellationTokenSource cts = new CancellationTokenSource())
-            {
-                await this.classUnderTest.UploadFileAsync(resourceId, filePath, cts.Token);
-            }
+            await this.classUnderTest.UploadFileAsync(resourceId, filePath, this.cancellationToken);
 
             // assert
             mockFileService.Verify(
@@ -174,7 +174,8 @@
                 .ReturnsAsync(createSessionResult);
 
             var fileSplitter = new FileSplitter();
-            var countOfFileParts = fileSplitter.GetCountOfFileParts(createSessionResult.Session.FileUploadChunkSizeInBytes, fullFileSize);
+            var countOfFileParts =
+                fileSplitter.GetCountOfFileParts(createSessionResult.Session.FileUploadChunkSizeInBytes, fullFileSize);
 
             var uploadStreamResult = new UploadStreamResult
             {
@@ -199,16 +200,11 @@
                 .ReturnsAsync(commitResult);
 
             int fileCheckedCalledCount = 0;
-            this.classUnderTest.FileChecked += (sender, args) =>
-            {
-                fileCheckedCalledCount++;
-            };
+            this.classUnderTest.FileChecked += (sender, args) => { fileCheckedCalledCount++; };
 
             // act
-            using (CancellationTokenSource cts = new CancellationTokenSource())
-            {
-                await this.classUnderTest.UploadFileAsync(resourceId, filePath, cts.Token);
-            }
+
+            await this.classUnderTest.UploadFileAsync(resourceId, filePath, this.cancellationToken);
 
             // assert
             Assert.AreEqual(1, fileCheckedCalledCount);
@@ -255,7 +251,8 @@
                 .ReturnsAsync(createSessionResult);
 
             var fileSplitter = new FileSplitter();
-            var countOfFileParts = fileSplitter.GetCountOfFileParts(createSessionResult.Session.FileUploadChunkSizeInBytes, fullFileSize);
+            var countOfFileParts =
+                fileSplitter.GetCountOfFileParts(createSessionResult.Session.FileUploadChunkSizeInBytes, fullFileSize);
 
             var uploadStreamResult = new UploadStreamResult
             {
@@ -280,10 +277,8 @@
                 .ReturnsAsync(commitResult);
 
             // act
-            using (CancellationTokenSource cts = new CancellationTokenSource())
-            {
-                await this.classUnderTest.UploadFileAsync(resourceId, filePath, cts.Token);
-            }
+
+            await this.classUnderTest.UploadFileAsync(resourceId, filePath, this.cancellationToken);
 
             // assert
             mockFileService.Verify(
@@ -346,7 +341,8 @@
                 .ReturnsAsync(createSessionResult);
 
             var fileSplitter = new FileSplitter();
-            var countOfFileParts = fileSplitter.GetCountOfFileParts(createSessionResult.Session.FileUploadChunkSizeInBytes, fullFileSize);
+            var countOfFileParts =
+                fileSplitter.GetCountOfFileParts(createSessionResult.Session.FileUploadChunkSizeInBytes, fullFileSize);
 
             var uploadStreamResult = new UploadStreamResult
             {
@@ -393,10 +389,8 @@
 
 
             // act
-            using (CancellationTokenSource cts = new CancellationTokenSource())
-            {
-                await this.classUnderTest.UploadFileAsync(resourceId, filePath, cts.Token);
-            }
+
+            await this.classUnderTest.UploadFileAsync(resourceId, filePath, this.cancellationToken);
 
             // assert
             mockFileService.Verify(

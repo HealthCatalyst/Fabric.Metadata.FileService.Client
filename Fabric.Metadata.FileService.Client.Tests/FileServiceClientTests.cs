@@ -99,7 +99,7 @@
                 .Verifiable();
 
             // act
-            var fileServiceClient = new FileServiceClient(this.mockAccessTokenRepository.Object, baseUri, handlerMock.Object);
+            var fileServiceClient = new FileServiceClient(this.mockAccessTokenRepository.Object, baseUri, handlerMock.Object, new CancellationToken());
             var result = await fileServiceClient.CheckFileAsync(resourceId).ConfigureAwait(false);
 
             // assert
@@ -176,7 +176,7 @@
                 .Verifiable();
 
             // act
-            var fileServiceClient = new FileServiceClient(this.mockAccessTokenRepository.Object, baseUri, handlerMock.Object);
+            var fileServiceClient = new FileServiceClient(this.mockAccessTokenRepository.Object, baseUri, handlerMock.Object, new CancellationToken());
             fileServiceClient.TransientError +=
                 (sender, args) => Console.WriteLine("Transient Error: " + args.StatusCode + " " + args.Response);
 
@@ -257,7 +257,7 @@
                 .Verifiable();
 
             // act
-            var fileServiceClient = new FileServiceClient(this.mockAccessTokenRepository.Object, baseUri, handlerMock.Object);
+            var fileServiceClient = new FileServiceClient(this.mockAccessTokenRepository.Object, baseUri, handlerMock.Object, new CancellationToken());
             fileServiceClient.TransientError +=
                 (sender, args) => Console.WriteLine("Transient Error: " + args.StatusCode + " " + args.Response);
 

@@ -46,6 +46,11 @@
         /// Gets or sets FileUploadSessionExpirationInMinutes
         /// </summary>
         public long FileUploadSessionExpirationInMinutes { get; set; }
+
+        /// <summary>
+        /// Gets or sets FileName
+        /// </summary>
+        public string FileName { get; set; }
     }
 
 }

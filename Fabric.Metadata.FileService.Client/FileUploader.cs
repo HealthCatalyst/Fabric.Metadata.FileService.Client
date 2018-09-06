@@ -71,7 +71,7 @@
             this.watch = new Stopwatch();
         }
 
-        public async Task UploadFileAsync(int resourceId, string filePath, CancellationToken ctsToken)
+        public async Task<UploadSession> UploadFileAsync(int resourceId, string filePath, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentNullException(nameof(filePath));
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
@@ -87,7 +87,7 @@
                 throw new InvalidAccessTokenException(accessToken);
             }
 
-            using (var fileServiceClient = CreateFileServiceClient())
+            using (var fileServiceClient = CreateFileServiceClient(cancellationToken))
             {
                 fileServiceClient.Navigating += RelayNavigatingEvent;
                 fileServiceClient.Navigated += RelayNavigatedEvent;
@@ -104,13 +104,20 @@
                     bool fileAlreadyExists = checkFileResult.FileNeedsUploading;
                     string hashForFile = checkFileResult.HashForFile;
 
-                    ctsToken.ThrowIfCancellationRequested();
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                    if (fileAlreadyExists) return;
+                    if (fileAlreadyExists)
+                    {
+                        return new UploadSession
+                        {
+                            FileName = checkFileResult.FileNameOnServer,
+                            FileHash = checkFileResult.HashForFileOnServer
+                        };
+                    }
 
                     // create new upload session
                     var uploadSession = await CreateNewUploadSessionAsync(fileServiceClient, resourceId);
-                    ctsToken.ThrowIfCancellationRequested();
+                    cancellationToken.ThrowIfCancellationRequested();
 
                     var countOfFileParts =
                         fileSplitter.GetCountOfFileParts(uploadSession.FileUploadChunkSizeInBytes, fullFileSize);
@@ -128,7 +135,7 @@
                             uploadSession.FileUploadMaxFileSizeInMegabytes,
                             async (stream, part) =>
                             {
-                                ctsToken.ThrowIfCancellationRequested();
+                                cancellationToken.ThrowIfCancellationRequested();
                                 // ReSharper disable AccessToDisposedClosure
                                 await this.UploadFilePartStreamAsync(fileServiceClient, stream, part, resourceId,
                                 uploadSession.SessionId, fileName, fullFileSize, countOfFileParts);
@@ -161,7 +168,7 @@
                                 commitResult = await CheckCommitAsync(fileServiceClient, resourceId,
                                     uploadSession.SessionId, fileName);
                                 if (commitResult.StatusCode != HttpStatusCode.Accepted) break;
-                                await Task.Delay(SecondsToSleepBetweenCallingCheckCommit, ctsToken);
+                                await Task.Delay(SecondsToSleepBetweenCallingCheckCommit, cancellationToken);
                             }
                         }
 
@@ -170,6 +177,8 @@
                             throw new InvalidOperationException(
                                 "Server was not able to commit the file.  Please try again.");
                         }
+
+                        return commitResult.Session;
                     }
                 }
                 finally
@@ -183,11 +192,11 @@
             }
         }
 
-        public async Task DownloadFileAsync(int resourceId, string utTempFolder, CancellationToken ctsToken)
+        public async Task DownloadFileAsync(int resourceId, string utTempFolder, CancellationToken cancellationToken)
         {
             if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
 
-            using (var fileServiceClient = CreateFileServiceClient())
+            using (var fileServiceClient = CreateFileServiceClient(cancellationToken))
             {
                 fileServiceClient.Navigating += RelayNavigatingEvent;
                 fileServiceClient.Navigated += RelayNavigatedEvent;
@@ -237,7 +246,7 @@
                     {
                         // if server has the file and the filename is the same then do a hash check to see if file needs uploading
                         if (result.FileNameOnServer != null
-                            && result.FileNameOnServer.Equals(Path.GetFileName(filePath)) 
+                            && result.FileNameOnServer.Equals(Path.GetFileName(filePath))
                             && result.HashForFileOnServer != null)
                         {
                             OnCalculatingHash(new CalculatingHashEventArgs(resourceId, filePath, fullFileSize));
@@ -254,7 +263,8 @@
                                 {
                                     FileNeedsUploading = true,
                                     HashForFile = hashForFile,
-                                    HashForFileOnServer = result.HashForFileOnServer
+                                    HashForFileOnServer = result.HashForFileOnServer,
+                                    FileNameOnServer = result.FileNameOnServer
                                 };
                             }
                         }
@@ -565,9 +575,9 @@
             CheckingCommit?.Invoke(this, new CheckingCommitEventArgs(resourceId, uploadSession.SessionId, timesCalled));
         }
 
-        private IFileServiceClient CreateFileServiceClient()
+        private IFileServiceClient CreateFileServiceClient(CancellationToken cancellationToken)
         {
-            return fileServiceClientFactory.CreateFileServiceClient(this.fileServiceAccessTokenRepository, this.mdsBaseUrl);
+            return fileServiceClientFactory.CreateFileServiceClient(this.fileServiceAccessTokenRepository, this.mdsBaseUrl, cancellationToken);
         }
     }
 
@@ -576,6 +586,7 @@
         public bool FileNeedsUploading { get; set; }
         public string HashForFile { get; set; }
         public string HashForFileOnServer { get; set; }
+        public string FileNameOnServer { get; set; }
     }
 }
 

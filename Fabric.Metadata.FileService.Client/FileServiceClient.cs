@@ -11,6 +11,7 @@
     using System.Net.Http;
     using System.Net.Http.Headers;
     using System.Text;
+    using System.Threading;
     using System.Threading.Tasks;
     using Exceptions;
     using Interfaces;
@@ -41,6 +42,7 @@
         private static HttpClient _httpClient;
         private readonly IFileServiceAccessTokenRepository fileServiceAccessTokenRepository;
         private readonly Uri mdsBaseUrl;
+        private readonly CancellationToken cancellationToken;
         private int numberOfPartsUploaded;
 
         private readonly HttpStatusCode[] httpStatusCodesWorthRetrying = {
@@ -55,11 +57,17 @@
 
         public static TimeSpan HttpTimeout = TimeSpan.FromMinutes(5);
 
-        public FileServiceClient(IFileServiceAccessTokenRepository fileServiceAccessTokenRepository, Uri mdsBaseUrl, HttpMessageHandler httpClientHandler)
+        public FileServiceClient(IFileServiceAccessTokenRepository fileServiceAccessTokenRepository, Uri mdsBaseUrl,
+            HttpMessageHandler httpClientHandler, CancellationToken cancellationToken)
         {
             if (fileServiceAccessTokenRepository == null)
             {
                 throw new ArgumentNullException(nameof(fileServiceAccessTokenRepository));
+            }
+
+            if (cancellationToken == null)
+            {
+                throw new ArgumentNullException(nameof(cancellationToken));
             }
 
             if (string.IsNullOrWhiteSpace(mdsBaseUrl.ToString()))
@@ -79,7 +87,7 @@
 
             this.fileServiceAccessTokenRepository = fileServiceAccessTokenRepository;
             this.mdsBaseUrl = mdsBaseUrl;
-
+            this.cancellationToken = cancellationToken;
             if (_httpClient == null)
             {
                 _httpClient = CreateHttpClient(httpClientHandler);
@@ -115,7 +123,7 @@
                 .ExecuteAsync(() =>
                 {
                     var httpRequestMessage = new HttpRequestMessage(HttpMethod.Get, fullUri);
-                    return _httpClient.SendAsync(httpRequestMessage);
+                    return _httpClient.SendAsync(httpRequestMessage, this.cancellationToken);
                 });
 
             var content = await httpResponse.Content.ReadAsStringAsync();
@@ -136,6 +144,11 @@
                         var headersLastModified = httpResponse.Content.Headers.LastModified;
                         var headersContentMd5 = httpResponse.Content.Headers.ContentMD5;
                         var contentDispositionFileName = httpResponse.Content.Headers.ContentDisposition?.FileName;
+
+                        if (!string.IsNullOrWhiteSpace(contentDispositionFileName))
+                        {
+                            contentDispositionFileName = contentDispositionFileName.Replace("\\", string.Empty).Replace("\"", string.Empty);
+                        }
 
                         var result = new CheckFileResult
                         {
@@ -204,7 +217,8 @@
                     fullUri,
                     new StringContent(JsonConvert.SerializeObject(form),
                         Encoding.UTF8,
-                        ApplicationJsonMediaType)));
+                        ApplicationJsonMediaType),
+                    this.cancellationToken));
 
             var content = await httpResponse.Content.ReadAsStringAsync();
             OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString(), content));
@@ -300,9 +314,9 @@
 
                         fileContent.Headers.ContentDisposition = new
                             ContentDispositionHeaderValue(DispositionType)
-                            {
-                                FileName = fileName
-                            };
+                        {
+                            FileName = fileName
+                        };
 
                         fileContent.Headers.ContentRange =
                             new ContentRangeHeaderValue(filePart.Offset, filePart.Offset + filePart.Size - 1,
@@ -312,7 +326,7 @@
                         fileContent.Headers.ContentMD5 = Encoding.UTF8.GetBytes(filePart.Hash);
                         requestContent.Add(fileContent);
 
-                        return await _httpClient.PutAsync(fullUri, requestContent);
+                        return await _httpClient.PutAsync(fullUri, requestContent, this.cancellationToken);
                     }
                 });
 
@@ -333,14 +347,14 @@
                     }
 
                 default:
-                {
-                    return new UploadStreamResult
                     {
-                        StatusCode = httpResponse.StatusCode,
-                        Error = content,
-                        FullUri = fullUri
-                    };
-                }
+                        return new UploadStreamResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            Error = content,
+                            FullUri = fullUri
+                        };
+                    }
             }
         }
 
@@ -399,7 +413,8 @@
                         fullUri,
                         new StringContent(JsonConvert.SerializeObject(form, jsonSerializerSettings),
                             Encoding.UTF8,
-                            ApplicationJsonMediaType));
+                            ApplicationJsonMediaType),
+                        this.cancellationToken);
                 });
 
             var content = await httpResponse.Content.ReadAsStringAsync();
@@ -423,16 +438,16 @@
                     }
 
                 case HttpStatusCode.Accepted:
-                {
-                    // the server is processing this asynchronously
-                    var result = new CommitResult
                     {
-                        StatusCode = httpResponse.StatusCode,
-                        FullUri = fullUri
-                    };
+                        // the server is processing this asynchronously
+                        var result = new CommitResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            FullUri = fullUri
+                        };
 
-                    return result;
-                }
+                        return result;
+                    }
 
                 case HttpStatusCode.BadRequest:
                     {
@@ -476,7 +491,7 @@
             var policy = GetRetryPolicy(resourceId, method, fullUri);
 
             var httpResponse = await policy
-                .ExecuteAsync(() => _httpClient.GetAsync(fullUri));
+                .ExecuteAsync(() => _httpClient.GetAsync(fullUri, this.cancellationToken));
 
             var content = await httpResponse.Content.ReadAsStringAsync();
 
@@ -499,16 +514,16 @@
                     }
 
                 case HttpStatusCode.Accepted:
-                {
-                    // the server is processing this asynchronously
-                    var result = new CommitResult
                     {
-                        StatusCode = httpResponse.StatusCode,
-                        FullUri = fullUri
-                    };
+                        // the server is processing this asynchronously
+                        var result = new CommitResult
+                        {
+                            StatusCode = httpResponse.StatusCode,
+                            FullUri = fullUri
+                        };
 
-                    return result;
-                }
+                        return result;
+                    }
 
                 case HttpStatusCode.BadRequest:
                     {
@@ -563,7 +578,7 @@
                 {
                     var httpRequestMessage = new HttpRequestMessage(HttpMethod.Get, fullUri);
                     httpRequestMessage.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
-                    return _httpClient.SendAsync(httpRequestMessage);
+                    return _httpClient.SendAsync(httpRequestMessage, this.cancellationToken);
                 });
 
             // we don't want to write the content in this case as the file can be very large
@@ -649,7 +664,7 @@
             var policy = GetRetryPolicy(resourceId, method, fullUri);
 
             var httpResponse = await policy
-                .ExecuteAsync(() => _httpClient.DeleteAsync(fullUri));
+                .ExecuteAsync(() => _httpClient.DeleteAsync(fullUri, this.cancellationToken));
 
             var content = await httpResponse.Content.ReadAsStringAsync();
 
@@ -726,6 +741,8 @@
                 .WaitAndRetryAsync(MaxRetryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(SecondsBetweenRetries, retryAttempt)),
                     async (result, timeSpan, retryCount, context) =>
                     {
+                        this.cancellationToken.ThrowIfCancellationRequested();
+
                         if (result.Result != null)
                         {
                             if (result.Result.StatusCode == HttpStatusCode.Unauthorized)

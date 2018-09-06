@@ -4,6 +4,7 @@
     using System.Threading;
     using System.Threading.Tasks;
     using Events;
+    using Structures;
 
     public interface IFileUploader : IDisposable
     {
@@ -22,8 +23,8 @@
         event CommittingEventHandler Committing;
         event CheckingCommitEventHandler CheckingCommit;
 
-        Task UploadFileAsync(int resourceId, string filePath, CancellationToken ctsToken);
-        Task DownloadFileAsync(int resourceId, string utTempFolder, CancellationToken ctsToken);
+        Task<UploadSession> UploadFileAsync(int resourceId, string filePath, CancellationToken cancellationToken);
+        Task DownloadFileAsync(int resourceId, string utTempFolder, CancellationToken cancellationToken);
 
     }
 }
