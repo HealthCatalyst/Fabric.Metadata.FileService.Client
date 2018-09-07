@@ -20,9 +20,16 @@ steps:
   inputs:
     solution: '**\Fabric.Metadata.FileService.Client.sln'
     vsVersion: 15.0
-    platform: '$(BuildPlatform)'
     configuration: '$(BuildConfiguration)'
     clean: true    
+
+- task: VSTest@1
+  displayName: 'Run Tests'
+  inputs:
+    testAssembly: 'Fabric.Metadata.FileService.Client\**\$(BuildConfiguration)\*test*.dll;-:**\obj\**'
+    codeCoverageEnabled: true
+    runInParallel: true
+    configuration: '$(BuildConfiguration)'    
 
 #- task: NuGetCommand@2
 #  inputs:
