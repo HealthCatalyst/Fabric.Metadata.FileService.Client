@@ -8,6 +8,23 @@ steps:
     dotnet build Fabric.Metadata.FileService.Client --configuration $(buildConfiguration)
     dotnet pack Fabric.Metadata.FileService.Client --configuration Release --output $(Build.ArtifactStagingDirectory)
 
+- task: NuGetInstaller@0
+  displayName: 'NuGet restore'
+  inputs:
+    solution: '**\Fabric.Metadata.FileService.Client.sln'
+    nugetConfigPath: Nuget.Config
+    noCache: true
+    verbosity: Detailed
+
+- task: VSBuild@1
+  displayName: Build
+  inputs:
+    solution: Api.Metadata/v2/Catalyst.Metadata.v2/Api.Metadata.v2.sln
+    vsVersion: 15.0
+    platform: '$(BuildPlatform)'
+    configuration: '$(BuildConfiguration)'
+    clean: true    
+
 #- task: NuGetCommand@2
 #  inputs:
 #    command: push
