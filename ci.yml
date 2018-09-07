@@ -12,7 +12,6 @@ steps:
   displayName: 'NuGet restore'
   inputs:
     solution: '**\Fabric.Metadata.FileService.Client.sln'
-    nugetConfigPath: Nuget.Config
     noCache: true
     verbosity: Detailed
 
