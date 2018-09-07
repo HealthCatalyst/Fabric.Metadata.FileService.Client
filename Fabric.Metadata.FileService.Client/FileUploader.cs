@@ -101,13 +101,16 @@
                     var checkFileResult =
                         await CheckIfFileExistsOnServerAsync(fileServiceClient, resourceId, filePath, fullFileSize);
 
-                    bool fileAlreadyExists = checkFileResult.FileNeedsUploading;
+                    bool fileNeedsUploading = checkFileResult.FileNeedsUploading;
                     string hashForFile = checkFileResult.HashForFile;
 
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    if (fileAlreadyExists)
+                    if (!fileNeedsUploading)
                     {
+                        // tell server to update the path from absolute to relative since we won't be uploading the file
+                        await SetUploadedAsync(fileServiceClient, resourceId);
+
                         return new UploadSession
                         {
                             FileName = checkFileResult.FileNameOnServer,
@@ -245,26 +248,41 @@
                 case HttpStatusCode.NoContent:
                     {
                         // if server has the file and the filename is the same then do a hash check to see if file needs uploading
-                        if (result.FileNameOnServer != null
-                            && result.FileNameOnServer.Equals(Path.GetFileName(filePath))
+                        var fileNameOnServer = Path.GetFileName(result.FileNameOnServer);
+                        if (fileNameOnServer != null
+                            && fileNameOnServer.Equals(Path.GetFileName(filePath))
                             && result.HashForFileOnServer != null)
                         {
                             OnCalculatingHash(new CalculatingHashEventArgs(resourceId, filePath, fullFileSize));
                             var hashForFile = new MD5FileHasher().CalculateHashForFile(filePath);
 
-                            OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile,
-                                result.HashForFileOnServer, result.LastModified,
-                                result.FileNameOnServer, hashForFile == result.HashForFileOnServer));
-
                             if (hashForFile == result.HashForFileOnServer
-                                && Path.GetFileName(filePath) == Path.GetFileName(result.FileNameOnServer))
+                                && Path.GetFileName(filePath) == fileNameOnServer)
                             {
+                                OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile,
+                                    result.HashForFileOnServer, result.LastModified,
+                                    fileNameOnServer, true));
+
+                                return new UploaderCheckFileResult
+                                {
+                                    FileNeedsUploading = false,
+                                    HashForFile = hashForFile,
+                                    HashForFileOnServer = result.HashForFileOnServer,
+                                    FileNameOnServer = fileNameOnServer
+                                };
+                            }
+                            else
+                            {
+                                OnFileChecked(new FileCheckedEventArgs(resourceId, true, hashForFile,
+                                    result.HashForFileOnServer, result.LastModified,
+                                    fileNameOnServer, false));
+
                                 return new UploaderCheckFileResult
                                 {
                                     FileNeedsUploading = true,
                                     HashForFile = hashForFile,
                                     HashForFileOnServer = result.HashForFileOnServer,
-                                    FileNameOnServer = result.FileNameOnServer
+                                    FileNameOnServer = fileNameOnServer
                                 };
                             }
                         }
@@ -273,7 +291,12 @@
                     }
                 case HttpStatusCode.NotFound:
                     // this is acceptable response if the file does not exist on the server
-                    break;
+                    OnFileChecked(new FileCheckedEventArgs(resourceId, false, null, null, null, null, false));
+
+                    return new UploaderCheckFileResult
+                    {
+                        FileNeedsUploading = true,
+                    };
 
                 default:
                     OnUploadError(new UploadErrorEventArgs(resourceId, result.FullUri, result.StatusCode.ToString(),
@@ -283,11 +306,25 @@
 
             return new UploaderCheckFileResult
             {
-                FileNeedsUploading = false
+                FileNeedsUploading = true
             };
         }
 
-        private async Task<UploadSession> CreateNewUploadSessionAsync(IFileServiceClient fileServiceClient,
+        private async Task<SetUploadedResult> SetUploadedAsync(IFileServiceClient fileServiceClient, int resourceId)
+        {
+            if (fileServiceClient == null)
+            {
+                throw new ArgumentNullException(nameof(fileServiceClient));
+            }
+
+            if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
+
+            var result = await fileServiceClient.SetUploadedAsync(resourceId);
+
+            return result;
+        }
+
+            private async Task<UploadSession> CreateNewUploadSessionAsync(IFileServiceClient fileServiceClient,
             int resourceId)
         {
             if (fileServiceClient == null)

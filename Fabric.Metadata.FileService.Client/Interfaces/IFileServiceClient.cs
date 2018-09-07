@@ -77,6 +77,19 @@
         /// <returns></returns>
         Task<DeleteSessionResult> DeleteUploadSessionAsync(int resourceId);
 
+        /// <summary>
+        /// This calls GET CheckCommit
+        /// </summary>
+        /// <param name="resourceId"></param>
+        /// <param name="sessionId"></param>
+        /// <returns></returns>
         Task<CommitResult> CheckCommitAsync(int resourceId, Guid sessionId);
+
+        /// <summary>
+        /// This calls POST SetUploaded
+        /// </summary>
+        /// <param name="resourceId"></param>
+        /// <returns></returns>
+        Task<SetUploadedResult> SetUploadedAsync(int resourceId);
     }
 }

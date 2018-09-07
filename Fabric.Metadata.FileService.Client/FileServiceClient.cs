@@ -240,14 +240,10 @@
                     }
                 case HttpStatusCode.BadRequest:
                     {
-                        dynamic clientResponse = JsonConvert.DeserializeObject(content);
-                        var errorCode = clientResponse["ErrorCode"] != null ? Convert.ToString(clientResponse["ErrorCode"]) : null;
-
                         return new CreateSessionResult
                         {
                             StatusCode = httpResponse.StatusCode,
                             FullUri = fullUri,
-                            ErrorCode = errorCode,
                             Error = content
                         };
                     }
@@ -451,16 +447,10 @@
 
                 case HttpStatusCode.BadRequest:
                     {
-                        dynamic clientResponse = JsonConvert.DeserializeObject(content);
-                        var errorCode = clientResponse["ErrorCode"] != null
-                            ? Convert.ToString(clientResponse["ErrorCode"])
-                            : null;
-
                         return new CommitResult
                         {
                             StatusCode = httpResponse.StatusCode,
                             FullUri = fullUri,
-                            ErrorCode = errorCode,
                             Error = content
                         };
                     }
@@ -527,16 +517,10 @@
 
                 case HttpStatusCode.BadRequest:
                     {
-                        dynamic clientResponse = JsonConvert.DeserializeObject(content);
-                        var errorCode = clientResponse["ErrorCode"] != null
-                            ? Convert.ToString(clientResponse["ErrorCode"])
-                            : null;
-
                         return new CommitResult
                         {
                             StatusCode = httpResponse.StatusCode,
                             FullUri = fullUri,
-                            ErrorCode = errorCode,
                             Error = content
                         };
                     }
@@ -550,6 +534,43 @@
                         };
                     }
             }
+        }
+
+        public async Task<SetUploadedResult> SetUploadedAsync(int resourceId)
+        {
+            if (resourceId <= 0) throw new ArgumentOutOfRangeException(nameof(resourceId));
+
+            var fullUri = new Uri(this.mdsBaseUrl, $"Files({resourceId})/MetadataService.SetUploaded");
+
+            var method = Convert.ToString(HttpMethod.Post);
+
+            await this.SetAuthorizationHeaderInHttpClientAsync(resourceId);
+
+            OnNavigating(new NavigatingEventArgs(resourceId, method, fullUri));
+
+            var form = new
+            {
+
+            };
+
+            var policy = GetRetryPolicy(resourceId, method, fullUri);
+
+            var httpResponse = await policy
+                .ExecuteAsync(() => _httpClient.PostAsync(
+                    fullUri,
+                    new StringContent(JsonConvert.SerializeObject(form),
+                        Encoding.UTF8,
+                        ApplicationJsonMediaType),
+                    this.cancellationToken));
+
+            var content = await httpResponse.Content.ReadAsStringAsync();
+
+            OnNavigated(new NavigatedEventArgs(resourceId, method, fullUri, httpResponse.StatusCode.ToString(), content));
+
+            return new SetUploadedResult
+            {
+                StatusCode = httpResponse.StatusCode
+            };
         }
 
         /// <inheritdoc />
@@ -703,6 +724,8 @@
         {
             var httpClient = new HttpClient(httpClientHandler, false);
             httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(ApplicationJsonMediaType));
+            httpClient.DefaultRequestHeaders.Connection.Clear();
+            httpClient.DefaultRequestHeaders.ConnectionClose = true;
             httpClient.Timeout = HttpTimeout;
             return httpClient;
         }
