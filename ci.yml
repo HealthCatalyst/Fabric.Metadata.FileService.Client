@@ -6,7 +6,6 @@ variables:
 steps:
 - script: |
     dotnet build Fabric.Metadata.FileService.Client --configuration $(buildConfiguration)
-#   dotnet test Fabric.Metadata.FileService.Client.Tests --configuration $(buildConfiguration) --logger trx
     dotnet pack Fabric.Metadata.FileService.Client --configuration Release --output $BUILD_ARTIFACTSTAGINGDIRECTORY
 
 #- task: NuGetCommand@2
