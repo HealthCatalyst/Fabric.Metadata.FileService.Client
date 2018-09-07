@@ -26,7 +26,7 @@ steps:
 - task: VSTest@1
   displayName: 'Run Tests'
   inputs:
-    testAssembly: 'Fabric.Metadata.FileService.Client\**\$(BuildConfiguration)\*test*.dll;-:**\obj\**'
+    testAssembly: 'Fabric.Metadata.FileService.Client.Tests\**\$(BuildConfiguration)\*test*.dll;-:**\obj\**'
     codeCoverageEnabled: true
     runInParallel: true
     configuration: '$(BuildConfiguration)'    
