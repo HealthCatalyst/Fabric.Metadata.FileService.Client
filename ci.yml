@@ -18,7 +18,7 @@ steps:
 - task: VSBuild@1
   displayName: Build
   inputs:
-    solution: Api.Metadata/v2/Catalyst.Metadata.v2/Api.Metadata.v2.sln
+    solution: '**\Fabric.Metadata.FileService.Client.sln'
     vsVersion: 15.0
     platform: '$(BuildPlatform)'
     configuration: '$(BuildConfiguration)'
