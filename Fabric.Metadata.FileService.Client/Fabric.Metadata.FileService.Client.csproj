@@ -1,9 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>1.1.1</Version>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <Version Condition=" '$(BUILD_BUILDNUMBER)' == '' ">1.1.0.0-local</Version>
+    <Version Condition=" '$(BUILD_BUILDNUMBER)' != '' ">$(BUILD_BUILDNUMBER)</Version>
     <Copyright>Health Catalyst</Copyright>
     <RepositoryUrl>https://github.com/HealthCatalyst/fabric.metadata.fileservice.client</RepositoryUrl>
     <RepositoryType>Github</RepositoryType>
