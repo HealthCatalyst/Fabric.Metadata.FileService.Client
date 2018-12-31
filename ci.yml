@@ -1,0 +1,45 @@
+queue: 'Hosted VS2017'
+
+variables:
+  buildConfiguration: 'Release'
+
+steps:
+- script: |
+    dotnet build Fabric.Metadata.FileService.Client --configuration $(buildConfiguration)
+    dotnet pack Fabric.Metadata.FileService.Client --configuration Release --output $(Build.ArtifactStagingDirectory)
+
+- task: NuGetInstaller@0
+  displayName: 'NuGet restore'
+  inputs:
+    solution: '**\Fabric.Metadata.FileService.Client.sln'
+    noCache: true
+    verbosity: Detailed
+
+- task: VSBuild@1
+  displayName: Build
+  inputs:
+    solution: '**\Fabric.Metadata.FileService.Client.sln'
+    vsVersion: 15.0
+    configuration: '$(BuildConfiguration)'
+    clean: true    
+
+- task: VSTest@1
+  displayName: 'Run Tests'
+  inputs:
+    testAssembly: 'Fabric.Metadata.FileService.Client.Tests\**\$(BuildConfiguration)\*test*.dll;-:**\obj\**'
+    codeCoverageEnabled: true
+    runInParallel: true
+    configuration: '$(BuildConfiguration)'    
+
+#- task: NuGetCommand@2
+#  inputs:
+#    command: push
+#    nuGetFeedType: external
+#    publishFeedCredentials: 'Nuget.org Health Catalyst Account'
+#    versioningScheme: byEnvVar
+#    versionEnvVar: Version    
+
+- task: PublishTestResults@2
+  inputs:
+    testRunner: VSTest
+    testResultsFiles: '**/*.trx'
