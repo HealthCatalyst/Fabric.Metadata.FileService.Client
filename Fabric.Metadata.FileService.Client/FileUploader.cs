@@ -171,7 +171,7 @@
                                 commitResult = await CheckCommitAsync(fileServiceClient, resourceId,
                                     uploadSession.SessionId, fileName);
                                 if (commitResult.StatusCode != HttpStatusCode.Accepted) break;
-                                await Task.Delay(SecondsToSleepBetweenCallingCheckCommit, cancellationToken);
+                                await Task.Delay(SecondsToSleepBetweenCallingCheckCommit * 1000, cancellationToken);
                             }
                         }
 
