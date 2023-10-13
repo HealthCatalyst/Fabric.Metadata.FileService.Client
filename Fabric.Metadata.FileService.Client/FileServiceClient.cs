@@ -755,7 +755,7 @@
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         }
 
-        private RetryPolicy<HttpResponseMessage> GetRetryPolicy(int resourceId, string method, Uri fullUri)
+        private AsyncRetryPolicy<HttpResponseMessage> GetRetryPolicy(int resourceId, string method, Uri fullUri)
         {
             return Policy
                 .Handle<HttpRequestException>()
